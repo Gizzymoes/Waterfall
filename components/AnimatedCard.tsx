@@ -26,12 +26,13 @@ export default function AnimatedCard({
 
   return (
     <motion.div
-      className={`max-w-xs mx-auto border rounded-lg shadow-lg overflow-hidden ${className}`}
+      className={`max-w-xs mx-auto border rounded-lg shadow-lg overflow-hidden${className}`}
       initial="hidden"
       animate="visible"
       whileHover={{ scale: 1.05 }}
       variants={variants}
       transition={{ duration: 0.5, ease: "easeOut" }}
+      style={{ borderWidth: 0 }}
     >
       <Image
         src={src}

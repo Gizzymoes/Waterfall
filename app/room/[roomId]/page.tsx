@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import AnimatedCard from "@/components/AnimatedCard";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 
 interface CardType {
   card: string;
@@ -405,19 +405,53 @@ export default function RoomPage() {
         Room: {roomId}
       </motion.h1>
 
-      {roomData.penaltyAnnouncement &&
-        roomData.penaltyAnnouncement.trim() !== "" && (
-          <Alert variant="destructive" className="mt-4">
-            <AlertDescription>{roomData.penaltyAnnouncement}</AlertDescription>
-          </Alert>
-        )}
+      {/* Animated Alerts for Violation & Pause */}
+      <AnimatePresence>
+        {roomData.penaltyAnnouncement &&
+          roomData.penaltyAnnouncement.trim() !== "" && (
+            <motion.div
+              key="penaltyAnnouncement"
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.3 }}
+            >
+              <Alert
+                variant="destructive"
+                className="mt-4 border-2 border-red-600 shadow-lg"
+              >
+                <AlertTitle className="font-bold text-red-700">
+                  Violation!
+                </AlertTitle>
+                <AlertDescription>
+                  {roomData.penaltyAnnouncement}
+                </AlertDescription>
+              </Alert>
+            </motion.div>
+          )}
+      </AnimatePresence>
 
-      {roomData.isPaused && (
-        <Alert variant="default" className="mt-4">
-          <AlertTitle>Game Paused:</AlertTitle>
-          <AlertDescription>{roomData.pauseReason}</AlertDescription>
-        </Alert>
-      )}
+      <AnimatePresence>
+        {roomData.isPaused && (
+          <motion.div
+            key="pausedGame"
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.9 }}
+            transition={{ duration: 0.3 }}
+          >
+            <Alert
+              variant="default"
+              className="mt-4 border-2 border-blue-600 shadow-lg"
+            >
+              <AlertTitle className="font-bold text-blue-700">
+                Game Paused:
+              </AlertTitle>
+              <AlertDescription>{roomData.pauseReason}</AlertDescription>
+            </Alert>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <motion.div
         initial={{ x: -20, opacity: 0 }}
@@ -518,29 +552,39 @@ export default function RoomPage() {
         <Card className="p-6">
           <h2 className="text-2xl font-bold mb-4">Current Card</h2>
           <div className="min-h-[500px] flex flex-col items-center justify-center">
-            {roomData.currentCard ? (
-              <motion.div
-                initial={{ y: -30, opacity: 0 }}
-                animate={{ y: 0, opacity: 1 }}
-                className="space-y-4"
-              >
-                <AnimatedCard
-                  card={roomData.currentCard.card}
-                  suit={roomData.currentCard.suit}
-                  className="mb-4"
-                />
-                <p className="text-center">{renderCardMessage()}</p>
-              </motion.div>
-            ) : (
-              <div className="text-center text-muted">
-                <p className="mb-4">Your card will appear here.</p>
-                {isMyTurn && (
-                  <Button onClick={drawCard} className="mx-auto">
-                    Draw Card
-                  </Button>
-                )}
-              </div>
-            )}
+            <AnimatePresence>
+              {roomData.currentCard ? (
+                <motion.div
+                  key="current-card"
+                  initial={{ y: -30, opacity: 0 }}
+                  animate={{ y: 0, opacity: 1 }}
+                  exit={{ y: 30, opacity: 0 }}
+                  className="space-y-4"
+                >
+                  <AnimatedCard
+                    card={roomData.currentCard.card}
+                    suit={roomData.currentCard.suit}
+                    className="mb-4"
+                  />
+                  <p className="text-center">{renderCardMessage()}</p>
+                </motion.div>
+              ) : (
+                <motion.div
+                  key="no-card"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="text-center text-muted"
+                >
+                  <p className="mb-4">Your card will appear here.</p>
+                  {isMyTurn && (
+                    <Button onClick={drawCard} className="mx-auto">
+                      Draw Card
+                    </Button>
+                  )}
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
         </Card>
       </motion.div>
@@ -594,44 +638,60 @@ export default function RoomPage() {
       )}
 
       {role === "referee" && (
-        <motion.div
-          initial={{ y: 20, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-        >
-          <Card className="p-6">
-            <h3 className="text-2xl font-bold mb-4">Referee Controls</h3>
-            <div className="mb-4">
-              {roomData.isPaused ? (
-                <Button onClick={resumeGame} className="mb-2">
-                  Resume Game
-                </Button>
-              ) : (
-                <Button onClick={pauseGame} className="mb-2">
-                  Pause Game
-                </Button>
-              )}
-            </div>
-            <p className="mb-2">
-              Mark a violation for a player (this assigns a penalty for the end
-              of the game):
-            </p>
-            <div className="space-y-2">
-              {roomData.players
-                .filter((p) => p !== roomData.referee)
-                .map((p, index) => (
-                  <div
-                    key={`violation-${p || "empty"}-${index}`}
-                    className="flex items-center space-x-4"
+        <AnimatePresence>
+          <motion.div
+            key="referee-controls"
+            initial={{ y: 20, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 20, opacity: 0 }}
+          >
+            <Card className="p-6 border-2 border-gray-300 shadow-md bg-gray-50">
+              <h3 className="text-2xl font-bold mb-4 text-gray-800">
+                Referee Controls
+              </h3>
+              <div className="mb-4">
+                {roomData.isPaused ? (
+                  <Button
+                    onClick={resumeGame}
+                    className="mb-2 bg-green-500 hover:bg-green-600 text-white"
                   >
-                    <span>{p}</span>
-                    <Button size="sm" onClick={() => markRuleViolation(p)}>
-                      Mark Violation
-                    </Button>
-                  </div>
-                ))}
-            </div>
-          </Card>
-        </motion.div>
+                    Resume Game
+                  </Button>
+                ) : (
+                  <Button
+                    onClick={pauseGame}
+                    className="mb-2 bg-yellow-500 hover:bg-yellow-600 text-white"
+                  >
+                    Pause Game
+                  </Button>
+                )}
+              </div>
+              <p className="mb-2 text-gray-700">
+                Mark a violation for a player (this assigns a penalty for the
+                end of the game):
+              </p>
+              <div className="space-y-2">
+                {roomData.players
+                  .filter((p) => p !== roomData.referee)
+                  .map((p, index) => (
+                    <div
+                      key={`violation-${p || "empty"}-${index}`}
+                      className="flex items-center justify-between bg-white p-2 rounded shadow-sm"
+                    >
+                      <span className="text-gray-800">{p}</span>
+                      <Button
+                        size="sm"
+                        onClick={() => markRuleViolation(p)}
+                        className="bg-red-500 hover:bg-red-600 text-white"
+                      >
+                        Mark Violation
+                      </Button>
+                    </div>
+                  ))}
+              </div>
+            </Card>
+          </motion.div>
+        </AnimatePresence>
       )}
     </motion.div>
   );
