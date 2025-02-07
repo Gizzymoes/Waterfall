@@ -17,6 +17,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
+import { motion, AnimatePresence } from "framer-motion";
+import LoadingScreen from "@/components/LoadingScreen";
 
 interface CardType {
   card: string;
@@ -131,6 +133,7 @@ export default function Lobby() {
   const [joinRoomId, setJoinRoomId] = useState("");
   const [activeLobbies, setActiveLobbies] = useState<LobbyRoom[]>([]);
   const [role, setRole] = useState<"player" | "referee" | "observer">("player");
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
     if (localStorage.getItem("game-auth") !== "true") {
@@ -158,6 +161,7 @@ export default function Lobby() {
       return alert("Observers cannot create a room.");
     }
     try {
+      setIsLoading(true);
       const roomCode = generateRoomCode();
       await setDoc(doc(db, "rooms", roomCode), {
         players: [name],
@@ -180,6 +184,8 @@ export default function Lobby() {
       router.push(`/room/${roomCode}`);
     } catch (error) {
       console.error("Error creating room:", error);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -188,6 +194,7 @@ export default function Lobby() {
       return alert("Enter both your name and a valid room ID");
     }
     try {
+      setIsLoading(true);
       const roomCode = joinRoomId.toUpperCase();
       const roomDocRef = doc(db, "rooms", roomCode);
       if (role === "observer") {
@@ -216,6 +223,8 @@ export default function Lobby() {
     } catch (error) {
       console.error("Error joining room:", error);
       alert("Failed to join room. Please check the room ID.");
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -225,6 +234,7 @@ export default function Lobby() {
       return;
     }
     try {
+      setIsLoading(true);
       const roomDocRef = doc(db, "rooms", roomId);
       if (role === "observer") {
         // Observers join without modifying the players list.
@@ -252,123 +262,141 @@ export default function Lobby() {
     } catch (error) {
       console.error("Error joining active lobby:", error);
       alert("Failed to join active lobby. Please try again.");
+    } finally {
+      setIsLoading(false);
     }
   };
 
   return (
-    <div className="container mx-auto p-4">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-        <div>
-          <Card className="p-6">
-            <h1 className="text-2xl font-bold mb-4">Lobby</h1>
-            <div className="mb-4">
-              <Label htmlFor="name" className="block mb-1">
-                Your Name
-              </Label>
-              <Input
-                id="name"
-                type="text"
-                placeholder="Your name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="w-full"
-              />
-            </div>
-            <div className="mb-4">
-              <p className="mb-1">Select Role:</p>
-              <div className="flex items-center space-x-4">
-                <label className="flex items-center space-x-2">
-                  <input
-                    type="radio"
-                    name="role"
-                    value="player"
-                    checked={role === "player"}
-                    onChange={(e) =>
-                      setRole(
-                        e.target.value as "player" | "referee" | "observer"
-                      )
-                    }
-                  />
-                  <span>Player</span>
-                </label>
-                <label className="flex items-center space-x-2">
-                  <input
-                    type="radio"
-                    name="role"
-                    value="referee"
-                    checked={role === "referee"}
-                    onChange={(e) =>
-                      setRole(
-                        e.target.value as "player" | "referee" | "observer"
-                      )
-                    }
-                  />
-                  <span>Referee</span>
-                </label>
-                <label className="flex items-center space-x-2">
-                  <input
-                    type="radio"
-                    name="role"
-                    value="observer"
-                    checked={role === "observer"}
-                    onChange={(e) =>
-                      setRole(
-                        e.target.value as "player" | "referee" | "observer"
-                      )
-                    }
-                  />
-                  <span>Observer</span>
-                </label>
-              </div>
-            </div>
-            <div className="mb-4">
-              <Button onClick={handleCreateRoom} className="w-full">
-                Create New Room
-              </Button>
-            </div>
-            <div className="mb-4">
-              <div className="flex space-x-2">
+    <AnimatePresence>
+      {isLoading && <LoadingScreen key="loading-screen" />}
+      <motion.div
+        key="lobby-content"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="container mx-auto p-4"
+      >
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          <motion.div
+            initial={{ x: -50, opacity: 0 }}
+            animate={{ x: 0, opacity: 1 }}
+            className="space-y-4"
+          >
+            <Card className="p-6">
+              <h1 className="text-2xl font-bold mb-4">Lobby</h1>
+              <div className="mb-4">
+                <Label htmlFor="name" className="block mb-1">
+                  Your Name
+                </Label>
                 <Input
+                  id="name"
                   type="text"
-                  placeholder="Room ID to join"
-                  value={joinRoomId}
-                  onChange={(e) => setJoinRoomId(e.target.value)}
-                  className="flex-1"
+                  placeholder="Your name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className="w-full"
                 />
-                <Button onClick={handleJoinRoom}>Join Room</Button>
               </div>
-            </div>
-          </Card>
-        </div>
-        <div>
-          <Card className="p-6">
-            <h2 className="text-xl font-bold mb-4">Active Lobbies</h2>
-            {activeLobbies.length === 0 ? (
-              <p>No active lobbies.</p>
-            ) : (
-              <ul className="space-y-2">
-                {activeLobbies.map((lobby) => (
-                  <li
-                    key={lobby.id}
-                    className="flex items-center justify-between"
-                  >
-                    <span>
-                      <strong>{lobby.id}</strong> ({lobby.players.length}{" "}
-                      players)
-                    </span>
-                    <Button
-                      size="sm"
-                      onClick={() => handleJoinActiveLobby(lobby.id)}
+              <div className="mb-4">
+                <p className="mb-1">Select Role:</p>
+                <div className="flex items-center space-x-4">
+                  <label className="flex items-center space-x-2">
+                    <input
+                      type="radio"
+                      name="role"
+                      value="player"
+                      checked={role === "player"}
+                      onChange={(e) =>
+                        setRole(
+                          e.target.value as "player" | "referee" | "observer"
+                        )
+                      }
+                    />
+                    <span>Player</span>
+                  </label>
+                  <label className="flex items-center space-x-2">
+                    <input
+                      type="radio"
+                      name="role"
+                      value="referee"
+                      checked={role === "referee"}
+                      onChange={(e) =>
+                        setRole(
+                          e.target.value as "player" | "referee" | "observer"
+                        )
+                      }
+                    />
+                    <span>Referee</span>
+                  </label>
+                  <label className="flex items-center space-x-2">
+                    <input
+                      type="radio"
+                      name="role"
+                      value="observer"
+                      checked={role === "observer"}
+                      onChange={(e) =>
+                        setRole(
+                          e.target.value as "player" | "referee" | "observer"
+                        )
+                      }
+                    />
+                    <span>Observer</span>
+                  </label>
+                </div>
+              </div>
+              <div className="mb-4">
+                <Button onClick={handleCreateRoom} className="w-full">
+                  Create New Room
+                </Button>
+              </div>
+              <div className="mb-4">
+                <div className="flex space-x-2">
+                  <Input
+                    type="text"
+                    placeholder="Room ID to join"
+                    value={joinRoomId}
+                    onChange={(e) => setJoinRoomId(e.target.value)}
+                    className="flex-1"
+                  />
+                  <Button onClick={handleJoinRoom}>Join Room</Button>
+                </div>
+              </div>
+            </Card>
+          </motion.div>
+          <motion.div
+            initial={{ x: 50, opacity: 0 }}
+            animate={{ x: 0, opacity: 1 }}
+          >
+            <Card className="p-6">
+              <h2 className="text-xl font-bold mb-4">Active Lobbies</h2>
+              {activeLobbies.length === 0 ? (
+                <p>No active lobbies.</p>
+              ) : (
+                <ul className="space-y-2">
+                  {activeLobbies.map((lobby, index) => (
+                    <li
+                      key={`lobby-${lobby.id || "empty"}-${index}`}
+                      className="flex items-center justify-between"
                     >
-                      Join
-                    </Button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </Card>
+                      <span>
+                        <strong>{lobby.id || "Unknown"}</strong> (
+                        {lobby.players.length} players)
+                      </span>
+                      <Button
+                        size="sm"
+                        onClick={() => handleJoinActiveLobby(lobby.id)}
+                      >
+                        Join
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Card>
+          </motion.div>
         </div>
-      </div>
-    </div>
+      </motion.div>
+    </AnimatePresence>
   );
 }

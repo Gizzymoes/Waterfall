@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
+import { motion } from "framer-motion";
 
 const SECRET_CODE = "josephissex";
 
@@ -34,7 +35,12 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-background">
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0 }}
+      className="flex items-center justify-center min-h-screen bg-background"
+    >
       <Card className="w-full max-w-md p-6">
         <h1 className="text-2xl font-bold text-center mb-4">
           Welcome to Kings Cup
@@ -62,6 +68,6 @@ export default function LoginPage() {
         </form>
         {error && <p className="mt-4 text-center text-destructive">{error}</p>}
       </Card>
-    </div>
+    </motion.div>
   );
 }

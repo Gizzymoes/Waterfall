@@ -4,13 +4,14 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { db } from "@/lib/firebase";
-import { doc, onSnapshot, updateDoc } from "firebase/firestore";
+import { doc, onSnapshot, updateDoc, getDoc } from "firebase/firestore";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import AnimatedCard from "@/components/AnimatedCard";
+import { motion } from "framer-motion";
 
 interface CardType {
   card: string;
@@ -390,8 +391,19 @@ export default function RoomPage() {
   };
 
   return (
-    <div className="container mx-auto p-4 space-y-6">
-      <h1 className="text-3xl font-bold">Room: {roomId}</h1>
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="container mx-auto p-4 space-y-6"
+    >
+      <motion.h1
+        initial={{ y: -20, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        className="text-3xl font-bold"
+      >
+        Room: {roomId}
+      </motion.h1>
 
       {roomData.penaltyAnnouncement &&
         roomData.penaltyAnnouncement.trim() !== "" && (
@@ -407,60 +419,74 @@ export default function RoomPage() {
         </Alert>
       )}
 
-      <Card className="p-6">
-        <h2 className="text-2xl font-bold mb-4">Players</h2>
-        <ul className="space-y-2">
-          {roomData.players.map((player, index) => (
-            <li
-              key={index}
-              className={`flex items-center ${
-                roomData.currentTurn === index ? "font-bold" : ""
-              } ${player === roomData.referee ? "text-primary" : ""}`}
-            >
-              {player}
-              {roomData.currentTurn === index && (
-                <span className="ml-2">(Current Turn)</span>
-              )}
-              {player === roomData.referee && (
-                <span className="ml-2">[Referee]</span>
-              )}
-              {roomData.thumbMaster === player && (
-                <span className="ml-2">[Thumb Master]</span>
-              )}
-              {roomData.questionMaster === player && (
-                <span className="ml-2">[Question Master]</span>
-              )}
-              {roomData.mates && roomData.mates[player] && (
-                <span className="ml-2 text-sm">
-                  (Mate: {roomData.mates[player]})
-                </span>
-              )}
-            </li>
-          ))}
-        </ul>
-      </Card>
-
-      <Card className="p-6">
-        <h2 className="text-xl font-semibold mb-2">Penalty Points</h2>
-        {roomData.penalties && Object.keys(roomData.penalties).length > 0 ? (
-          <ul className="list-disc list-inside space-y-1">
-            {Object.entries(roomData.penalties).map(([player, points]) => (
-              <li key={player}>
-                {player}: {points} drink(s)
+      <motion.div
+        initial={{ x: -20, opacity: 0 }}
+        animate={{ x: 0, opacity: 1 }}
+      >
+        <Card className="p-6">
+          <h2 className="text-2xl font-bold mb-4">Players</h2>
+          <ul className="space-y-2">
+            {roomData.players.map((player, index) => (
+              <li
+                key={`player-${player || "empty"}-${index}`}
+                className={`flex items-center ${
+                  roomData.currentTurn === index ? "font-bold" : ""
+                } ${player === roomData.referee ? "text-primary" : ""}`}
+              >
+                {player}
+                {roomData.currentTurn === index && (
+                  <span className="ml-2">(Current Turn)</span>
+                )}
+                {player === roomData.referee && (
+                  <span className="ml-2">[Referee]</span>
+                )}
+                {roomData.thumbMaster === player && (
+                  <span className="ml-2">[Thumb Master]</span>
+                )}
+                {roomData.questionMaster === player && (
+                  <span className="ml-2">[Question Master]</span>
+                )}
+                {roomData.mates && roomData.mates[player] && (
+                  <span className="ml-2 text-sm">
+                    (Mate: {roomData.mates[player]})
+                  </span>
+                )}
               </li>
             ))}
           </ul>
-        ) : (
-          <p>No penalties yet.</p>
-        )}
-        {roomData.deck.length === 0 && (
-          <p className="mt-2 italic text-sm">
-            Last card! Please finish your penalty drinks.
-          </p>
-        )}
-      </Card>
+        </Card>
+      </motion.div>
 
-      <div className="flex flex-col md:flex-row md:justify-between items-center">
+      <motion.div
+        initial={{ x: 20, opacity: 0 }}
+        animate={{ x: 0, opacity: 1 }}
+      >
+        <Card className="p-6">
+          <h2 className="text-xl font-semibold mb-2">Penalty Points</h2>
+          {roomData.penalties && Object.keys(roomData.penalties).length > 0 ? (
+            <ul className="list-disc list-inside space-y-1">
+              {Object.entries(roomData.penalties).map(([player, points]) => (
+                <li key={`penalty-${player}`}>
+                  {player}: {points} drink(s)
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p>No penalties yet.</p>
+          )}
+          {roomData.deck.length === 0 && (
+            <p className="mt-2 italic text-sm">
+              Last card! Please finish your penalty drinks.
+            </p>
+          )}
+        </Card>
+      </motion.div>
+
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        className="flex flex-col md:flex-row md:justify-between items-center"
+      >
         <p className="text-lg">Cards left: {roomData.deck.length}</p>
         {roomData.deck.length === 0 && (
           <div className="flex space-x-4 mt-4 md:mt-0">
@@ -470,40 +496,54 @@ export default function RoomPage() {
             </Button>
           </div>
         )}
-      </div>
+      </motion.div>
 
       {roomData.currentRule && (
-        <Card className="p-4">
-          <p>
-            <strong>Current Rule:</strong> {roomData.currentRule}
-          </p>
-        </Card>
+        <motion.div
+          initial={{ scale: 0.8, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+        >
+          <Card className="p-4">
+            <p>
+              <strong>Current Rule:</strong> {roomData.currentRule}
+            </p>
+          </Card>
+        </motion.div>
       )}
 
-      <Card className="p-6">
-        <h2 className="text-2xl font-bold mb-4">Current Card</h2>
-        <div className="min-h-[500px] flex flex-col items-center justify-center">
-          {roomData.currentCard ? (
-            <div className="space-y-4">
-              <AnimatedCard
-                card={roomData.currentCard.card}
-                suit={roomData.currentCard.suit}
-                className="mb-4"
-              />
-              <p className="text-center">{renderCardMessage()}</p>
-            </div>
-          ) : (
-            <div className="text-center text-muted">
-              <p className="mb-4">Your card will appear here.</p>
-              {isMyTurn && (
-                <Button onClick={drawCard} className="mx-auto">
-                  Draw Card
-                </Button>
-              )}
-            </div>
-          )}
-        </div>
-      </Card>
+      <motion.div
+        initial={{ scale: 0.8, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+      >
+        <Card className="p-6">
+          <h2 className="text-2xl font-bold mb-4">Current Card</h2>
+          <div className="min-h-[500px] flex flex-col items-center justify-center">
+            {roomData.currentCard ? (
+              <motion.div
+                initial={{ y: -30, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                className="space-y-4"
+              >
+                <AnimatedCard
+                  card={roomData.currentCard.card}
+                  suit={roomData.currentCard.suit}
+                  className="mb-4"
+                />
+                <p className="text-center">{renderCardMessage()}</p>
+              </motion.div>
+            ) : (
+              <div className="text-center text-muted">
+                <p className="mb-4">Your card will appear here.</p>
+                {isMyTurn && (
+                  <Button onClick={drawCard} className="mx-auto">
+                    Draw Card
+                  </Button>
+                )}
+              </div>
+            )}
+          </div>
+        </Card>
+      </motion.div>
 
       {role === "observer" ? (
         <Card className="p-6">
@@ -531,52 +571,68 @@ export default function RoomPage() {
       )}
 
       {selectingMate && isMyTurn && (
-        <Card className="p-6">
-          <h3 className="text-xl font-semibold mb-2">Select a Mate</h3>
-          <div className="flex flex-wrap gap-2">
-            {roomData.players
-              .filter((p) => p !== localName)
-              .map((p, index) => (
-                <Button key={index} onClick={() => chooseMate(p)}>
-                  {p}
-                </Button>
-              ))}
-          </div>
-        </Card>
+        <motion.div
+          initial={{ scale: 0.8, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+        >
+          <Card className="p-6">
+            <h3 className="text-xl font-semibold mb-2">Select a Mate</h3>
+            <div className="flex flex-wrap gap-2">
+              {roomData.players
+                .filter((p) => p !== localName)
+                .map((p, index) => (
+                  <Button
+                    key={`mate-${p || "empty"}-${index}`}
+                    onClick={() => chooseMate(p)}
+                  >
+                    {p}
+                  </Button>
+                ))}
+            </div>
+          </Card>
+        </motion.div>
       )}
 
       {role === "referee" && (
-        <Card className="p-6">
-          <h3 className="text-2xl font-bold mb-4">Referee Controls</h3>
-          <div className="mb-4">
-            {roomData.isPaused ? (
-              <Button onClick={resumeGame} className="mb-2">
-                Resume Game
-              </Button>
-            ) : (
-              <Button onClick={pauseGame} className="mb-2">
-                Pause Game
-              </Button>
-            )}
-          </div>
-          <p className="mb-2">
-            Mark a violation for a player (this assigns a penalty for the end of
-            the game):
-          </p>
-          <div className="space-y-2">
-            {roomData.players
-              .filter((p) => p !== roomData.referee)
-              .map((p, index) => (
-                <div key={index} className="flex items-center space-x-4">
-                  <span>{p}</span>
-                  <Button size="sm" onClick={() => markRuleViolation(p)}>
-                    Mark Violation
-                  </Button>
-                </div>
-              ))}
-          </div>
-        </Card>
+        <motion.div
+          initial={{ y: 20, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+        >
+          <Card className="p-6">
+            <h3 className="text-2xl font-bold mb-4">Referee Controls</h3>
+            <div className="mb-4">
+              {roomData.isPaused ? (
+                <Button onClick={resumeGame} className="mb-2">
+                  Resume Game
+                </Button>
+              ) : (
+                <Button onClick={pauseGame} className="mb-2">
+                  Pause Game
+                </Button>
+              )}
+            </div>
+            <p className="mb-2">
+              Mark a violation for a player (this assigns a penalty for the end
+              of the game):
+            </p>
+            <div className="space-y-2">
+              {roomData.players
+                .filter((p) => p !== roomData.referee)
+                .map((p, index) => (
+                  <div
+                    key={`violation-${p || "empty"}-${index}`}
+                    className="flex items-center space-x-4"
+                  >
+                    <span>{p}</span>
+                    <Button size="sm" onClick={() => markRuleViolation(p)}>
+                      Mark Violation
+                    </Button>
+                  </div>
+                ))}
+            </div>
+          </Card>
+        </motion.div>
       )}
-    </div>
+    </motion.div>
   );
 }

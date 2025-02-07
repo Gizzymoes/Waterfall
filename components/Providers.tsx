@@ -2,6 +2,7 @@
 "use client";
 
 import { ThemeProvider } from "next-themes";
+import { motion } from "framer-motion";
 import {
   Dialog,
   DialogTrigger,
@@ -16,7 +17,12 @@ import { Button } from "@/components/ui/button";
 export default function Providers({ children }: { children: React.ReactNode }) {
   return (
     <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-      <div className="relative min-h-screen">
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.6 }}
+        className="relative min-h-screen"
+      >
         {/* Legend Dialog – using shadcn default styling */}
         <div className="absolute top-4 right-4 z-50">
           <Dialog>
@@ -71,7 +77,7 @@ export default function Providers({ children }: { children: React.ReactNode }) {
           </Dialog>
         </div>
         {children}
-      </div>
+      </motion.div>
     </ThemeProvider>
   );
 }

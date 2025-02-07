@@ -1,4 +1,4 @@
-// app/layout.tsx (server component)
+// app/layout.tsx
 import "./globals.css";
 import { ReactNode } from "react";
 import Providers from "@/components/Providers";
