@@ -1,13 +1,17 @@
 // app/room/[roomId]/page.tsx
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { db } from "@/lib/firebase";
-import { doc, onSnapshot, updateDoc, getDoc } from "firebase/firestore";
+import {
+  doc,
+  onSnapshot,
+  updateDoc,
+  getDoc,
+  arrayRemove,
+} from "firebase/firestore";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import AnimatedCard from "@/components/AnimatedCard";
@@ -86,6 +90,7 @@ export default function RoomPage() {
     ],
   };
 
+  // Set local user name and role; if not set, redirect to lobby.
   useEffect(() => {
     const name = localStorage.getItem("playerName");
     const storedRole =
@@ -101,6 +106,7 @@ export default function RoomPage() {
     }
   }, [router]);
 
+  // Subscribe to room data.
   useEffect(() => {
     if (!roomId) return;
     const roomRef = doc(db, "rooms", roomId);
@@ -115,6 +121,7 @@ export default function RoomPage() {
     return () => unsubscribe();
   }, [roomId, router]);
 
+  // Clear penalty announcement after 5 seconds.
   useEffect(() => {
     if (
       roomData?.penaltyAnnouncement &&
@@ -127,6 +134,17 @@ export default function RoomPage() {
       return () => clearTimeout(timeout);
     }
   }, [roomData?.penaltyAnnouncement, roomId]);
+
+  // NEW: Scroll to top when a violation occurs or game is paused.
+  useEffect(() => {
+    if (
+      (roomData?.penaltyAnnouncement &&
+        roomData.penaltyAnnouncement.trim() !== "") ||
+      roomData?.isPaused
+    ) {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  }, [roomData?.penaltyAnnouncement, roomData?.isPaused]);
 
   if (!roomData) return <p>Loading room data...</p>;
 
@@ -254,6 +272,85 @@ export default function RoomPage() {
       currentTurn: nextTurn,
       penaltyAnnouncement: "",
     });
+  };
+
+  // Updates the players array and adjusts currentTurn if needed.
+  const updatePlayersAfterRemoval = async (newPlayers: string[]) => {
+    const roomRef = doc(db, "rooms", roomId);
+    let newCurrentTurn = roomData!.currentTurn;
+    if (newPlayers.length > 0) {
+      newCurrentTurn = newCurrentTurn % newPlayers.length;
+    } else {
+      newCurrentTurn = 0;
+    }
+    await updateDoc(roomRef, {
+      players: newPlayers,
+      currentTurn: newCurrentTurn,
+    });
+  };
+
+  // Function for a player to leave the game voluntarily.
+  const handleLeaveGame = async () => {
+    if (!confirm("Are you sure you want to leave the game?")) return;
+    try {
+      const newPlayers = roomData.players.filter((p) => p !== localName);
+      const removedIndex = roomData.players.indexOf(localName!);
+      let newCurrentTurn = roomData.currentTurn;
+      if (removedIndex !== -1) {
+        if (removedIndex < roomData.currentTurn) {
+          newCurrentTurn = roomData.currentTurn - 1;
+        } else if (removedIndex === roomData.currentTurn) {
+          newCurrentTurn =
+            newPlayers.length > 0
+              ? roomData.currentTurn % newPlayers.length
+              : 0;
+        }
+      }
+      const roomRef = doc(db, "rooms", roomId);
+      const updateData: any = {
+        players: newPlayers,
+        currentTurn: newCurrentTurn,
+      };
+      if (localName === roomData.referee) {
+        updateData.referee = null;
+      }
+      await updateDoc(roomRef, updateData);
+      localStorage.removeItem("playerName");
+      localStorage.removeItem("roomId");
+      localStorage.removeItem("playerRole");
+      router.push("/lobby");
+    } catch (error) {
+      console.error("Error leaving game:", error);
+      alert("Failed to leave the game. Please try again.");
+    }
+  };
+
+  // Function for the referee to remove another player.
+  const removePlayer = async (playerName: string) => {
+    if (!confirm(`Are you sure you want to remove ${playerName}?`)) return;
+    try {
+      const newPlayers = roomData.players.filter((p) => p !== playerName);
+      const removedIndex = roomData.players.indexOf(playerName);
+      let newCurrentTurn = roomData.currentTurn;
+      if (removedIndex !== -1) {
+        if (removedIndex < roomData.currentTurn) {
+          newCurrentTurn = roomData.currentTurn - 1;
+        } else if (removedIndex === roomData.currentTurn) {
+          newCurrentTurn =
+            newPlayers.length > 0
+              ? roomData.currentTurn % newPlayers.length
+              : 0;
+        }
+      }
+      const roomRef = doc(db, "rooms", roomId);
+      await updateDoc(roomRef, {
+        players: newPlayers,
+        currentTurn: newCurrentTurn,
+      });
+    } catch (error) {
+      console.error("Error removing player:", error);
+      alert("Failed to remove player. Please try again.");
+    }
   };
 
   const chooseMate = async (mateName: string) => {
@@ -453,6 +550,7 @@ export default function RoomPage() {
         )}
       </AnimatePresence>
 
+      {/* Players List (names are white by default; referee name in blue) */}
       <motion.div
         initial={{ x: -20, opacity: 0 }}
         animate={{ x: 0, opacity: 1 }}
@@ -463,33 +561,138 @@ export default function RoomPage() {
             {roomData.players.map((player, index) => (
               <li
                 key={`player-${player || "empty"}-${index}`}
-                className={`flex items-center ${
-                  roomData.currentTurn === index ? "font-bold" : ""
-                } ${player === roomData.referee ? "text-primary" : ""}`}
+                className="flex flex-col sm:flex-row items-start sm:items-center"
               >
-                {player}
-                {roomData.currentTurn === index && (
-                  <span className="ml-2">(Current Turn)</span>
-                )}
-                {player === roomData.referee && (
-                  <span className="ml-2">[Referee]</span>
-                )}
-                {roomData.thumbMaster === player && (
-                  <span className="ml-2">[Thumb Master]</span>
-                )}
-                {roomData.questionMaster === player && (
-                  <span className="ml-2">[Question Master]</span>
-                )}
-                {roomData.mates && roomData.mates[player] && (
-                  <span className="ml-2 text-sm">
-                    (Mate: {roomData.mates[player]})
-                  </span>
-                )}
+                <span
+                  className={`font-bold text-white ${
+                    player === roomData.referee ? "text-blue-600" : ""
+                  }`}
+                >
+                  {player}
+                </span>
+                <div className="flex flex-wrap gap-1 mt-1 sm:mt-0 sm:ml-2">
+                  {roomData.currentTurn === index && (
+                    <span className="px-2 py-0.5 bg-green-200 text-green-700 rounded text-xs">
+                      Current Turn
+                    </span>
+                  )}
+                  {player === roomData.referee && (
+                    <span className="px-2 py-0.5 bg-blue-200 text-blue-700 rounded text-xs">
+                      Referee
+                    </span>
+                  )}
+                  {roomData.thumbMaster === player && (
+                    <span className="px-2 py-0.5 bg-purple-200 text-purple-700 rounded text-xs">
+                      Thumb Master
+                    </span>
+                  )}
+                  {roomData.questionMaster === player && (
+                    <span className="px-2 py-0.5 bg-orange-200 text-orange-700 rounded text-xs">
+                      Question Master
+                    </span>
+                  )}
+                  {roomData.mates && roomData.mates[player] && (
+                    <span className="px-2 py-0.5 bg-gray-200 text-gray-700 rounded text-xs">
+                      Mate: {roomData.mates[player]}
+                    </span>
+                  )}
+                </div>
               </li>
             ))}
           </ul>
+          {/* Button for the current player to leave the game */}
+          {role !== "observer" && (
+            <div className="text-center mt-4">
+              <Button variant="destructive" onClick={handleLeaveGame}>
+                Leave Game
+              </Button>
+            </div>
+          )}
         </Card>
       </motion.div>
+
+      {/* Referee Controls */}
+      {role === "referee" && (
+        <AnimatePresence>
+          <motion.div
+            key="referee-controls"
+            initial={{ y: 20, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 20, opacity: 0 }}
+          >
+            <Card className="p-6 border-2 border-gray-300 shadow-md bg-gray-50">
+              <h3 className="text-2xl font-bold mb-4 text-gray-800">
+                Referee Controls
+              </h3>
+              <div className="mb-4">
+                {roomData.isPaused ? (
+                  <Button
+                    onClick={resumeGame}
+                    className="mb-2 bg-green-500 hover:bg-green-600 text-white"
+                  >
+                    Resume Game
+                  </Button>
+                ) : (
+                  <Button
+                    onClick={pauseGame}
+                    className="mb-2 bg-yellow-500 hover:bg-yellow-600 text-white"
+                  >
+                    Pause Game
+                  </Button>
+                )}
+              </div>
+              <p className="mb-2 text-gray-700">
+                Mark a violation for a player (this assigns a penalty for the
+                end of the game):
+              </p>
+              <div className="space-y-2">
+                {roomData.players
+                  .filter((p) => p !== roomData.referee)
+                  .map((p, index) => (
+                    <div
+                      key={`violation-${p || "empty"}-${index}`}
+                      className="flex items-center justify-between bg-white p-2 rounded shadow-sm"
+                    >
+                      <span className="text-gray-800">{p}</span>
+                      <Button
+                        size="sm"
+                        onClick={() => markRuleViolation(p)}
+                        className="bg-red-500 hover:bg-red-600 text-white"
+                      >
+                        Mark Violation
+                      </Button>
+                    </div>
+                  ))}
+              </div>
+              {/* New Section for Removing a Player */}
+              <div className="mt-4">
+                <h4 className="text-lg font-bold text-gray-800">
+                  Remove a Player
+                </h4>
+                <div className="space-y-2">
+                  {roomData.players
+                    .filter((p) => p !== roomData.referee)
+                    .map((p, index) => (
+                      <div
+                        key={`remove-${p || "empty"}-${index}`}
+                        className="flex items-center justify-between bg-white p-2 rounded shadow-sm"
+                      >
+                        <span className="text-gray-800">{p}</span>
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          onClick={() => removePlayer(p)}
+                        >
+                          Remove
+                        </Button>
+                      </div>
+                    ))}
+                </div>
+              </div>
+            </Card>
+          </motion.div>
+        </AnimatePresence>
+      )}
 
       <motion.div
         initial={{ x: 20, opacity: 0 }}
@@ -545,21 +748,23 @@ export default function RoomPage() {
         </motion.div>
       )}
 
+      {/* Current Card Section with Fixed Container Height */}
       <motion.div
         initial={{ scale: 0.8, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
       >
         <Card className="p-6">
           <h2 className="text-2xl font-bold mb-4">Current Card</h2>
-          <div className="min-h-[500px] flex flex-col items-center justify-center">
+          <div className="relative min-h-[500px]">
             <AnimatePresence>
               {roomData.currentCard ? (
                 <motion.div
                   key="current-card"
+                  layout
+                  className="absolute inset-0 flex flex-col items-center justify-center space-y-4"
                   initial={{ y: -30, opacity: 0 }}
                   animate={{ y: 0, opacity: 1 }}
                   exit={{ y: 30, opacity: 0 }}
-                  className="space-y-4"
                 >
                   <AnimatedCard
                     card={roomData.currentCard.card}
@@ -571,10 +776,11 @@ export default function RoomPage() {
               ) : (
                 <motion.div
                   key="no-card"
+                  layout
+                  className="absolute inset-0 flex flex-col items-center justify-center text-center text-muted"
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
-                  className="text-center text-muted"
                 >
                   <p className="mb-4">Your card will appear here.</p>
                   {isMyTurn && (
@@ -635,63 +841,6 @@ export default function RoomPage() {
             </div>
           </Card>
         </motion.div>
-      )}
-
-      {role === "referee" && (
-        <AnimatePresence>
-          <motion.div
-            key="referee-controls"
-            initial={{ y: 20, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            exit={{ y: 20, opacity: 0 }}
-          >
-            <Card className="p-6 border-2 border-gray-300 shadow-md bg-gray-50">
-              <h3 className="text-2xl font-bold mb-4 text-gray-800">
-                Referee Controls
-              </h3>
-              <div className="mb-4">
-                {roomData.isPaused ? (
-                  <Button
-                    onClick={resumeGame}
-                    className="mb-2 bg-green-500 hover:bg-green-600 text-white"
-                  >
-                    Resume Game
-                  </Button>
-                ) : (
-                  <Button
-                    onClick={pauseGame}
-                    className="mb-2 bg-yellow-500 hover:bg-yellow-600 text-white"
-                  >
-                    Pause Game
-                  </Button>
-                )}
-              </div>
-              <p className="mb-2 text-gray-700">
-                Mark a violation for a player (this assigns a penalty for the
-                end of the game):
-              </p>
-              <div className="space-y-2">
-                {roomData.players
-                  .filter((p) => p !== roomData.referee)
-                  .map((p, index) => (
-                    <div
-                      key={`violation-${p || "empty"}-${index}`}
-                      className="flex items-center justify-between bg-white p-2 rounded shadow-sm"
-                    >
-                      <span className="text-gray-800">{p}</span>
-                      <Button
-                        size="sm"
-                        onClick={() => markRuleViolation(p)}
-                        className="bg-red-500 hover:bg-red-600 text-white"
-                      >
-                        Mark Violation
-                      </Button>
-                    </div>
-                  ))}
-              </div>
-            </Card>
-          </motion.div>
-        </AnimatePresence>
       )}
     </motion.div>
   );
