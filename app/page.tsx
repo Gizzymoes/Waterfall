@@ -3,15 +3,19 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Card } from "@/components/ui/card";
 
-const SECRET_CODE = "josephissex"; // Change this to your desired secret code
+const SECRET_CODE = "josephissex";
 
 export default function LoginPage() {
   const router = useRouter();
   const [code, setCode] = useState("");
   const [error, setError] = useState("");
 
-  // Automatically redirect if already authenticated
+  // Automatically redirect if already authenticated.
   useEffect(() => {
     const auth = localStorage.getItem("game-auth");
     if (auth === "true") {
@@ -25,26 +29,39 @@ export default function LoginPage() {
       localStorage.setItem("game-auth", "true");
       router.push("/lobby");
     } else {
-      setError("Incorrect code loser. Please try again.");
+      setError("Incorrect code. Please try again.");
     }
   };
 
   return (
-    <div>
-      <h1>Welcome to Kings Cup</h1>
-      <p>Please enter the secret code to continue:</p>
-      <form onSubmit={handleSubmit}>
-        <input
-          type="password"
-          value={code}
-          onChange={(e) => setCode(e.target.value)}
-          placeholder="Secret Code"
-        />
-        <button type="submit" style={{ marginLeft: "0.5rem" }}>
-          Enter
-        </button>
-      </form>
-      {error && <p style={{ color: "red" }}>{error}</p>}
+    <div className="flex items-center justify-center min-h-screen bg-background">
+      <Card className="w-full max-w-md p-6">
+        <h1 className="text-2xl font-bold text-center mb-4">
+          Welcome to Kings Cup
+        </h1>
+        <p className="text-center mb-6">
+          Please enter the secret code to continue:
+        </p>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <Label htmlFor="secret-code" className="block mb-1">
+              Secret Code
+            </Label>
+            <Input
+              id="secret-code"
+              type="password"
+              value={code}
+              onChange={(e) => setCode(e.target.value)}
+              placeholder="Secret Code"
+              className="w-full"
+            />
+          </div>
+          <Button type="submit" className="w-full">
+            Enter
+          </Button>
+        </form>
+        {error && <p className="mt-4 text-center text-destructive">{error}</p>}
+      </Card>
     </div>
   );
 }

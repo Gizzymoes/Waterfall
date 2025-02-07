@@ -11,17 +11,20 @@ import {
   arrayUnion,
   collection,
   onSnapshot,
-  getDoc, // <-- new import for referee check
+  getDoc,
 } from "firebase/firestore";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Card } from "@/components/ui/card";
 
-interface Card {
+interface CardType {
   card: string;
   suit: string;
   action: string;
   description: string;
 }
 
-// Define the mapping for each rank.
 const cardMapping: { [key: string]: { action: string; description: string } } =
   {
     Ace: {
@@ -86,9 +89,8 @@ const cardMapping: { [key: string]: { action: string; description: string } } =
     },
   };
 
-// Generate a full 52-card deck with suits.
-function generateDeck(): Card[] {
-  const deck: Card[] = [];
+function generateDeck(): CardType[] {
+  const deck: CardType[] = [];
   const suits = ["Hearts", "Diamonds", "Clubs", "Spades"];
   const ranks = Object.keys(cardMapping);
   for (const suit of suits) {
@@ -128,7 +130,6 @@ export default function Lobby() {
   const [name, setName] = useState("");
   const [joinRoomId, setJoinRoomId] = useState("");
   const [activeLobbies, setActiveLobbies] = useState<LobbyRoom[]>([]);
-  // New state: role selection (player, referee, observer)
   const [role, setRole] = useState<"player" | "referee" | "observer">("player");
 
   useEffect(() => {
@@ -137,7 +138,7 @@ export default function Lobby() {
     }
   }, [router]);
 
-  // Subscribe to active lobbies (all documents in the "rooms" collection)
+  // Subscribe to active lobbies.
   useEffect(() => {
     const roomsRef = collection(db, "rooms");
     const unsubscribe = onSnapshot(roomsRef, (snapshot) => {
@@ -190,16 +191,14 @@ export default function Lobby() {
       const roomCode = joinRoomId.toUpperCase();
       const roomDocRef = doc(db, "rooms", roomCode);
       if (role === "observer") {
-        // Observers simply join (they do not update the players list)
+        // Observers join without updating the players list.
       } else if (role === "referee") {
-        // Referees: check if a referee already exists
         const roomSnap = await getDoc(roomDocRef);
         if (roomSnap.exists()) {
           const data = roomSnap.data();
           if (data.referee && data.referee !== name) {
             return alert("This room already has a referee.");
           }
-          // If no referee exists, update the field and add to players list
           await updateDoc(roomDocRef, {
             referee: name,
             players: arrayUnion(name),
@@ -208,7 +207,6 @@ export default function Lobby() {
           return alert("Room not found.");
         }
       } else {
-        // Normal player – add to players list
         await updateDoc(roomDocRef, { players: arrayUnion(name) });
       }
       localStorage.setItem("playerName", name);
@@ -221,7 +219,6 @@ export default function Lobby() {
     }
   };
 
-  // New function for joining an active lobby from the sidebar.
   const handleJoinActiveLobby = async (roomId: string) => {
     if (!name) {
       alert("Enter your name first.");
@@ -259,96 +256,118 @@ export default function Lobby() {
   };
 
   return (
-    <div style={{ display: "flex", justifyContent: "space-between" }}>
-      <div style={{ flex: "1 1 60%" }}>
-        <h1>Lobby</h1>
+    <div className="container mx-auto p-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
         <div>
-          <input
-            type="text"
-            placeholder="Your name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            style={{ marginRight: "1rem" }}
-          />
+          <Card className="p-6">
+            <h1 className="text-2xl font-bold mb-4">Lobby</h1>
+            <div className="mb-4">
+              <Label htmlFor="name" className="block mb-1">
+                Your Name
+              </Label>
+              <Input
+                id="name"
+                type="text"
+                placeholder="Your name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                className="w-full"
+              />
+            </div>
+            <div className="mb-4">
+              <p className="mb-1">Select Role:</p>
+              <div className="flex items-center space-x-4">
+                <label className="flex items-center space-x-2">
+                  <input
+                    type="radio"
+                    name="role"
+                    value="player"
+                    checked={role === "player"}
+                    onChange={(e) =>
+                      setRole(
+                        e.target.value as "player" | "referee" | "observer"
+                      )
+                    }
+                  />
+                  <span>Player</span>
+                </label>
+                <label className="flex items-center space-x-2">
+                  <input
+                    type="radio"
+                    name="role"
+                    value="referee"
+                    checked={role === "referee"}
+                    onChange={(e) =>
+                      setRole(
+                        e.target.value as "player" | "referee" | "observer"
+                      )
+                    }
+                  />
+                  <span>Referee</span>
+                </label>
+                <label className="flex items-center space-x-2">
+                  <input
+                    type="radio"
+                    name="role"
+                    value="observer"
+                    checked={role === "observer"}
+                    onChange={(e) =>
+                      setRole(
+                        e.target.value as "player" | "referee" | "observer"
+                      )
+                    }
+                  />
+                  <span>Observer</span>
+                </label>
+              </div>
+            </div>
+            <div className="mb-4">
+              <Button onClick={handleCreateRoom} className="w-full">
+                Create New Room
+              </Button>
+            </div>
+            <div className="mb-4">
+              <div className="flex space-x-2">
+                <Input
+                  type="text"
+                  placeholder="Room ID to join"
+                  value={joinRoomId}
+                  onChange={(e) => setJoinRoomId(e.target.value)}
+                  className="flex-1"
+                />
+                <Button onClick={handleJoinRoom}>Join Room</Button>
+              </div>
+            </div>
+          </Card>
         </div>
-        {/* Role selection */}
-        <div style={{ marginTop: "1rem" }}>
-          <label style={{ marginRight: "1rem" }}>
-            <input
-              type="radio"
-              name="role"
-              value="player"
-              checked={role === "player"}
-              onChange={(e) =>
-                setRole(e.target.value as "player" | "referee" | "observer")
-              }
-            />{" "}
-            Player
-          </label>
-          <label style={{ marginRight: "1rem" }}>
-            <input
-              type="radio"
-              name="role"
-              value="referee"
-              checked={role === "referee"}
-              onChange={(e) =>
-                setRole(e.target.value as "player" | "referee" | "observer")
-              }
-            />{" "}
-            Referee
-          </label>
-          <label>
-            <input
-              type="radio"
-              name="role"
-              value="observer"
-              checked={role === "observer"}
-              onChange={(e) =>
-                setRole(e.target.value as "player" | "referee" | "observer")
-              }
-            />{" "}
-            Observer
-          </label>
+        <div>
+          <Card className="p-6">
+            <h2 className="text-xl font-bold mb-4">Active Lobbies</h2>
+            {activeLobbies.length === 0 ? (
+              <p>No active lobbies.</p>
+            ) : (
+              <ul className="space-y-2">
+                {activeLobbies.map((lobby) => (
+                  <li
+                    key={lobby.id}
+                    className="flex items-center justify-between"
+                  >
+                    <span>
+                      <strong>{lobby.id}</strong> ({lobby.players.length}{" "}
+                      players)
+                    </span>
+                    <Button
+                      size="sm"
+                      onClick={() => handleJoinActiveLobby(lobby.id)}
+                    >
+                      Join
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Card>
         </div>
-        <div style={{ marginTop: "1rem" }}>
-          <button onClick={handleCreateRoom}>Create New Room</button>
-        </div>
-        <div style={{ marginTop: "1rem" }}>
-          <input
-            type="text"
-            placeholder="Room ID to join"
-            value={joinRoomId}
-            onChange={(e) => setJoinRoomId(e.target.value)}
-            style={{ marginRight: "1rem" }}
-          />
-          <button onClick={handleJoinRoom}>Join Room</button>
-        </div>
-      </div>
-      <div
-        style={{
-          flex: "1 1 35%",
-          borderLeft: "1px solid #ccc",
-          paddingLeft: "1rem",
-        }}
-      >
-        <h2>Active Lobbies</h2>
-        {activeLobbies.length === 0 ? (
-          <p>No active lobbies.</p>
-        ) : (
-          <ul>
-            {activeLobbies.map((lobby) => (
-              <li key={lobby.id} style={{ marginBottom: "0.5rem" }}>
-                <strong>{lobby.id}</strong> ({lobby.players.length} players)
-                <button
-                  style={{ marginLeft: "0.5rem" }}
-                  onClick={() => handleJoinActiveLobby(lobby.id)}
-                >
-                  Join
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
       </div>
     </div>
   );

@@ -1,11 +1,18 @@
+// app/room/[roomId]/page.tsx
 "use client";
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { db } from "@/lib/firebase";
 import { doc, onSnapshot, updateDoc } from "firebase/firestore";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Card } from "@/components/ui/card";
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
+import AnimatedCard from "@/components/AnimatedCard";
 
-interface Card {
+interface CardType {
   card: string;
   suit: string;
   action: string;
@@ -17,8 +24,8 @@ interface RoomData {
   players: string[];
   referee?: string | null;
   currentTurn: number;
-  deck: Card[];
-  currentCard: Card | null;
+  deck: CardType[];
+  currentCard: CardType | null;
   thumbMaster: string | null;
   questionMaster: string | null;
   currentRule?: string;
@@ -30,8 +37,8 @@ interface RoomData {
 }
 
 interface UpdateData {
-  deck?: Card[];
-  currentCard?: Card | null;
+  deck?: CardType[];
+  currentCard?: CardType | null;
   currentRule?: string;
   thumbMaster?: string | null;
   questionMaster?: string | null;
@@ -174,8 +181,8 @@ export default function RoomPage() {
     },
   };
 
-  function generateDeck(): Card[] {
-    const deck: Card[] = [];
+  function generateDeck(): CardType[] {
+    const deck: CardType[] = [];
     const suits = ["Hearts", "Diamonds", "Clubs", "Spades"];
     const ranks = Object.keys(cardMapping);
     for (const suit of suits) {
@@ -196,12 +203,11 @@ export default function RoomPage() {
       return alert("No more cards in the deck!");
     if (!isMyTurn) return alert("It's not your turn!");
     if (gameIsPaused) return alert("The game is currently paused.");
-    const nextCard: Card = {
+    const nextCard: CardType = {
       ...roomData.deck[0],
       drawnBy: localName || "Unknown",
     };
 
-    // If a referee draws one of the drink-forcing cards, generate a fun message automatically.
     if (
       role === "referee" &&
       ["2", "3", "Jack", "Queen", "8"].includes(nextCard.card)
@@ -301,7 +307,6 @@ export default function RoomPage() {
     await updateDoc(roomRef, { isPaused: false, pauseReason: "" });
   };
 
-  // --- Rendering a Contextual Card Message ---
   const renderCardMessage = (): string | null => {
     if (!roomData.currentCard) return null;
     const { card, suit, drawnBy, description } = roomData.currentCard;
@@ -324,7 +329,7 @@ export default function RoomPage() {
         case "6":
           return `You drew ${cardName}. Choose someone to be your mate!`;
         case "7":
-          return `You drew ${cardName}. You're now the Thumb Master—raise your thumb whenever!`;
+          return `You drew ${cardName}. You're now the Thumb Master—start raising your thumb!`;
         case "8":
           return `You drew ${cardName}. You must take a drink.`;
         case "9":
@@ -336,17 +341,18 @@ export default function RoomPage() {
         case "Queen":
           return `You drew ${cardName}. You must take a drink.`;
         case "King":
-          return `You drew ${cardName}. Create a new rule for the game.`;
+          return `You drew ${cardName} and created a new rule: ${
+            roomData.currentRule || "No rule provided."
+          }`;
         default:
           return `You drew ${cardName}. ${description}`;
       }
     } else {
-      // For other players observing the card.
       if (
         drawnBy === roomData.referee &&
         ["2", "3", "Jack", "Queen", "8"].includes(card)
       ) {
-        return `${drawnBy} is the referee. She drew ${cardName} and was asked: "${description}". Whoever she selects must drink for her.`;
+        return `${drawnBy} is the referee. They drew ${cardName} and were prompted: "${description}". Whoever they select must drink for them.`;
       }
       switch (card) {
         case "Ace":
@@ -384,204 +390,192 @@ export default function RoomPage() {
   };
 
   return (
-    <div>
-      <h1>Room: {roomId}</h1>
+    <div className="container mx-auto p-4 space-y-6">
+      <h1 className="text-3xl font-bold">Room: {roomId}</h1>
 
-      {/* Global Penalty Announcement Banner */}
       {roomData.penaltyAnnouncement &&
         roomData.penaltyAnnouncement.trim() !== "" && (
-          <div
-            style={{
-              marginTop: "1rem",
-              padding: "1rem",
-              backgroundColor: "#ffeeba",
-              border: "1px solid #f5c842",
-            }}
-          >
-            <strong>{roomData.penaltyAnnouncement}</strong>
-          </div>
+          <Alert variant="destructive" className="mt-4">
+            <AlertDescription>{roomData.penaltyAnnouncement}</AlertDescription>
+          </Alert>
         )}
 
-      {/* Game Pause Banner */}
       {roomData.isPaused && (
-        <div
-          style={{
-            marginTop: "1rem",
-            padding: "1rem",
-            backgroundColor: "#d1ecf1",
-            border: "1px solid #bee5eb",
-          }}
-        >
-          <strong>Game Paused:</strong> {roomData.pauseReason}
-        </div>
+        <Alert variant="default" className="mt-4">
+          <AlertTitle>Game Paused:</AlertTitle>
+          <AlertDescription>{roomData.pauseReason}</AlertDescription>
+        </Alert>
       )}
 
-      <h2>Players:</h2>
-      <ul>
-        {roomData.players.map((player, index) => (
-          <li
-            key={index}
-            style={{
-              fontWeight: roomData.currentTurn === index ? "bold" : "normal",
-              color: player === roomData.referee ? "purple" : "inherit",
-            }}
-          >
-            {player}
-            {roomData.currentTurn === index && " ← (Current Turn)"}
-            {player === roomData.referee && " [Referee]"}
-            {roomData.thumbMaster === player && " [Thumb Master]"}
-            {roomData.questionMaster === player && " [Question Master]"}
-            {roomData.mates && roomData.mates[player] && (
-              <span style={{ fontSize: "0.8rem" }}>
-                {" "}
-                (Mate: {roomData.mates[player]})
-              </span>
-            )}
-          </li>
-        ))}
-      </ul>
+      <Card className="p-6">
+        <h2 className="text-2xl font-bold mb-4">Players</h2>
+        <ul className="space-y-2">
+          {roomData.players.map((player, index) => (
+            <li
+              key={index}
+              className={`flex items-center ${
+                roomData.currentTurn === index ? "font-bold" : ""
+              } ${player === roomData.referee ? "text-primary" : ""}`}
+            >
+              {player}
+              {roomData.currentTurn === index && (
+                <span className="ml-2">(Current Turn)</span>
+              )}
+              {player === roomData.referee && (
+                <span className="ml-2">[Referee]</span>
+              )}
+              {roomData.thumbMaster === player && (
+                <span className="ml-2">[Thumb Master]</span>
+              )}
+              {roomData.questionMaster === player && (
+                <span className="ml-2">[Question Master]</span>
+              )}
+              {roomData.mates && roomData.mates[player] && (
+                <span className="ml-2 text-sm">
+                  (Mate: {roomData.mates[player]})
+                </span>
+              )}
+            </li>
+          ))}
+        </ul>
+      </Card>
 
-      {/* Global Penalty Points Panel */}
-      {roomData.penalties && Object.keys(roomData.penalties).length > 0 && (
-        <div
-          style={{
-            marginTop: "1rem",
-            border: "1px solid red",
-            padding: "0.5rem",
-          }}
-        >
-          <h3>Penalty Points</h3>
-          <ul>
+      <Card className="p-6">
+        <h2 className="text-xl font-semibold mb-2">Penalty Points</h2>
+        {roomData.penalties && Object.keys(roomData.penalties).length > 0 ? (
+          <ul className="list-disc list-inside space-y-1">
             {Object.entries(roomData.penalties).map(([player, points]) => (
               <li key={player}>
                 {player}: {points} drink(s)
               </li>
             ))}
           </ul>
-          {roomData.deck.length === 0 && (
-            <p>
-              <em>Last card! Please finish your penalty drinks.</em>
-            </p>
-          )}
-        </div>
-      )}
+        ) : (
+          <p>No penalties yet.</p>
+        )}
+        {roomData.deck.length === 0 && (
+          <p className="mt-2 italic text-sm">
+            Last card! Please finish your penalty drinks.
+          </p>
+        )}
+      </Card>
 
-      <div style={{ marginTop: "1rem" }}>
-        <p>Cards left: {roomData.deck.length}</p>
+      <div className="flex flex-col md:flex-row md:justify-between items-center">
+        <p className="text-lg">Cards left: {roomData.deck.length}</p>
+        {roomData.deck.length === 0 && (
+          <div className="flex space-x-4 mt-4 md:mt-0">
+            <Button onClick={resetRound}>Reset Round</Button>
+            <Button variant="destructive" onClick={quitRoom}>
+              Quit Room
+            </Button>
+          </div>
+        )}
       </div>
 
-      {roomData.deck.length === 0 && (
-        <div
-          style={{
-            marginTop: "1rem",
-            padding: "1rem",
-            border: "1px solid black",
-          }}
-        >
-          <p>The deck is empty.</p>
-          <button onClick={resetRound} style={{ marginRight: "1rem" }}>
-            Reset Round
-          </button>
-          <button onClick={quitRoom}>Quit Room</button>
-        </div>
-      )}
-
       {roomData.currentRule && (
-        <div
-          style={{
-            marginTop: "1rem",
-            padding: "0.5rem",
-            border: "1px solid black",
-          }}
-        >
-          <strong>Current Rule:</strong> {roomData.currentRule}
-        </div>
+        <Card className="p-4">
+          <p>
+            <strong>Current Rule:</strong> {roomData.currentRule}
+          </p>
+        </Card>
       )}
 
-      <div style={{ marginTop: "2rem" }}>
-        <h2>Current Card:</h2>
-        {roomData.currentCard ? (
-          <div style={{ fontSize: "1.5rem", marginBottom: "1rem" }}>
-            <strong>
-              {roomData.currentCard.card} of {roomData.currentCard.suit} -{" "}
-              {roomData.currentCard.action}
-            </strong>
-            <p>{renderCardMessage()}</p>
-          </div>
-        ) : (
-          <p>No card drawn yet.</p>
-        )}
+      <Card className="p-6">
+        <h2 className="text-2xl font-bold mb-4">Current Card</h2>
+        <div className="min-h-[500px] flex flex-col items-center justify-center">
+          {roomData.currentCard ? (
+            <div className="space-y-4">
+              <AnimatedCard
+                card={roomData.currentCard.card}
+                suit={roomData.currentCard.suit}
+                className="mb-4"
+              />
+              <p className="text-center">{renderCardMessage()}</p>
+            </div>
+          ) : (
+            <div className="text-center text-muted">
+              <p className="mb-4">Your card will appear here.</p>
+              {isMyTurn && (
+                <Button onClick={drawCard} className="mx-auto">
+                  Draw Card
+                </Button>
+              )}
+            </div>
+          )}
+        </div>
+      </Card>
 
-        {role === "observer" ? (
+      {role === "observer" ? (
+        <Card className="p-6">
           <p>You are observing the game. You cannot take actions.</p>
-        ) : gameIsPaused ? (
+        </Card>
+      ) : gameIsPaused ? (
+        <Card className="p-6">
           <p>Game is paused. Please wait for the referee to resume the game.</p>
-        ) : isMyTurn ? (
-          <div>
-            {!roomData.currentCard ? (
-              <button onClick={drawCard}>Draw Card</button>
-            ) : (
-              <button onClick={endTurn}>End Turn</button>
-            )}
-          </div>
-        ) : (
+        </Card>
+      ) : isMyTurn ? (
+        <div className="flex justify-center">
+          {!roomData.currentCard ? (
+            <Button onClick={drawCard}>Draw Card</Button>
+          ) : (
+            <Button onClick={endTurn}>End Turn</Button>
+          )}
+        </div>
+      ) : (
+        <Card className="p-6">
           <p>
             Waiting for {roomData.players[roomData.currentTurn]} to take their
             turn.
           </p>
-        )}
+        </Card>
+      )}
 
-        {selectingMate && isMyTurn && (
-          <div>
-            <p>Select a mate:</p>
+      {selectingMate && isMyTurn && (
+        <Card className="p-6">
+          <h3 className="text-xl font-semibold mb-2">Select a Mate</h3>
+          <div className="flex flex-wrap gap-2">
             {roomData.players
               .filter((p) => p !== localName)
               .map((p, index) => (
-                <button
-                  key={index}
-                  onClick={() => chooseMate(p)}
-                  style={{ marginRight: "0.5rem" }}
-                >
+                <Button key={index} onClick={() => chooseMate(p)}>
                   {p}
-                </button>
+                </Button>
               ))}
           </div>
-        )}
-      </div>
+        </Card>
+      )}
 
       {role === "referee" && (
-        <div
-          style={{
-            marginTop: "2rem",
-            border: "1px solid #ccc",
-            padding: "1rem",
-          }}
-        >
-          <h3>Referee Controls</h3>
-          {roomData.isPaused ? (
-            <button onClick={resumeGame} style={{ marginBottom: "1rem" }}>
-              Resume Game
-            </button>
-          ) : (
-            <button onClick={pauseGame} style={{ marginBottom: "1rem" }}>
-              Pause Game
-            </button>
-          )}
-          <p>
+        <Card className="p-6">
+          <h3 className="text-2xl font-bold mb-4">Referee Controls</h3>
+          <div className="mb-4">
+            {roomData.isPaused ? (
+              <Button onClick={resumeGame} className="mb-2">
+                Resume Game
+              </Button>
+            ) : (
+              <Button onClick={pauseGame} className="mb-2">
+                Pause Game
+              </Button>
+            )}
+          </div>
+          <p className="mb-2">
             Mark a violation for a player (this assigns a penalty for the end of
             the game):
           </p>
-          {roomData.players
-            .filter((p) => p !== roomData.referee)
-            .map((p, index) => (
-              <div key={index} style={{ marginBottom: "0.5rem" }}>
-                <span style={{ marginRight: "1rem" }}>{p}</span>
-                <button onClick={() => markRuleViolation(p)}>
-                  Mark Violation
-                </button>
-              </div>
-            ))}
-        </div>
+          <div className="space-y-2">
+            {roomData.players
+              .filter((p) => p !== roomData.referee)
+              .map((p, index) => (
+                <div key={index} className="flex items-center space-x-4">
+                  <span>{p}</span>
+                  <Button size="sm" onClick={() => markRuleViolation(p)}>
+                    Mark Violation
+                  </Button>
+                </div>
+              ))}
+          </div>
+        </Card>
       )}
     </div>
   );
