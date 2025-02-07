@@ -83,7 +83,7 @@ export default function RoomPage() {
   } = {
     Ace: {
       action: "Waterfall",
-      description: "Drink continuously until you decide to stop.",
+      description: "Drink continuously until they decide to stop.",
     },
     "2": { action: "Take a Drink", description: "Take two sips." },
     "3": {
