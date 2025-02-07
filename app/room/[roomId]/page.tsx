@@ -1,4 +1,3 @@
-// app/room/[roomId]/page.tsx
 "use client";
 
 import { useEffect, useState } from "react";
@@ -6,7 +5,6 @@ import { useParams, useRouter } from "next/navigation";
 import { db } from "@/lib/firebase";
 import { doc, onSnapshot, updateDoc } from "firebase/firestore";
 
-// Add a suit property to the Card interface.
 interface Card {
   card: string;
   suit: string;
@@ -17,6 +15,7 @@ interface Card {
 
 interface RoomData {
   players: string[];
+  referee?: string | null;
   currentTurn: number;
   deck: Card[];
   currentCard: Card | null;
@@ -24,6 +23,10 @@ interface RoomData {
   questionMaster: string | null;
   currentRule?: string;
   mates?: { [key: string]: string };
+  penalties?: { [key: string]: number };
+  isPaused?: boolean;
+  pauseReason?: string;
+  penaltyAnnouncement?: string;
 }
 
 interface UpdateData {
@@ -32,6 +35,9 @@ interface UpdateData {
   currentRule?: string;
   thumbMaster?: string | null;
   questionMaster?: string | null;
+  isPaused?: boolean;
+  pauseReason?: string;
+  penaltyAnnouncement?: string;
 }
 
 export default function RoomPage() {
@@ -41,19 +47,52 @@ export default function RoomPage() {
 
   const [roomData, setRoomData] = useState<RoomData | null>(null);
   const [localName, setLocalName] = useState<string | null>(null);
+  const [role, setRole] = useState<"player" | "referee" | "observer">("player");
   const [selectingMate, setSelectingMate] = useState(false);
 
-  // Load the player's name for reconnection.
+  // Predefined fun messages for referee drink cards.
+  const refereeFunMessages: { [key: string]: string[] } = {
+    "2": [
+      "Who swore the most in your opinion? That person drinks!",
+      "Who has been the most aggressive? That person takes a drink!",
+      "Who took the longest to answer? They drink!",
+      "Who needs a timeout? They must drink!",
+    ],
+    "3": [
+      "Who owes you a compliment? That person drinks!",
+      "Who is the class clown tonight? They take a drink!",
+      "Who needs to lighten up? They drink!",
+    ],
+    Jack: [
+      "Who had the worst dance moves? They drink!",
+      "Who is the biggest chatterbox? They take a drink!",
+    ],
+    Queen: [
+      "Who is the life of the party? They drink!",
+      "Who told the worst joke? They take a sip!",
+    ],
+    "8": [
+      "Who swore the most last round? They drink!",
+      "Who acted the wildest? They drink!",
+      "Who took too long to get ready? They drink!",
+    ],
+  };
+
   useEffect(() => {
     const name = localStorage.getItem("playerName");
+    const storedRole =
+      (localStorage.getItem("playerRole") as
+        | "player"
+        | "referee"
+        | "observer") || "player";
     if (!name) {
       router.push("/lobby");
     } else {
       setLocalName(name);
+      setRole(storedRole);
     }
   }, [router]);
 
-  // Subscribe to real-time room updates.
   useEffect(() => {
     if (!roomId) return;
     const roomRef = doc(db, "rooms", roomId);
@@ -68,22 +107,33 @@ export default function RoomPage() {
     return () => unsubscribe();
   }, [roomId, router]);
 
+  useEffect(() => {
+    if (
+      roomData?.penaltyAnnouncement &&
+      roomData.penaltyAnnouncement.trim() !== ""
+    ) {
+      const timeout = setTimeout(() => {
+        const roomRef = doc(db, "rooms", roomId);
+        updateDoc(roomRef, { penaltyAnnouncement: "" });
+      }, 5000);
+      return () => clearTimeout(timeout);
+    }
+  }, [roomData?.penaltyAnnouncement, roomId]);
+
   if (!roomData) return <p>Loading room data...</p>;
 
+  const gameIsPaused = roomData.isPaused;
   const isMyTurn = localName === roomData.players[roomData.currentTurn];
 
-  // --- Utility: Shuffle Function ---
   const shuffle = <T,>(array: T[]): T[] =>
     array.sort(() => Math.random() - 0.5);
 
-  // --- Card Mapping (for deck regeneration) ---
-  // Note: The mapping is based on rank only.
   const cardMapping: {
     [key: string]: { action: string; description: string };
   } = {
     Ace: {
       action: "Waterfall",
-      description: "Drink continuously until they decide to stop.",
+      description: "Drink continuously until you decide to stop.",
     },
     "2": { action: "Take a Drink", description: "Take two sips." },
     "3": {
@@ -124,7 +174,6 @@ export default function RoomPage() {
     },
   };
 
-  // Generate a full 52-card deck with suits.
   function generateDeck(): Card[] {
     const deck: Card[] = [];
     const suits = ["Hearts", "Diamonds", "Clubs", "Spades"];
@@ -142,20 +191,33 @@ export default function RoomPage() {
     return deck;
   }
 
-  // --- Game Actions ---
-
   const drawCard = async () => {
     if (!roomData.deck || roomData.deck.length === 0)
       return alert("No more cards in the deck!");
     if (!isMyTurn) return alert("It's not your turn!");
+    if (gameIsPaused) return alert("The game is currently paused.");
     const nextCard: Card = {
       ...roomData.deck[0],
       drawnBy: localName || "Unknown",
     };
+
+    // If a referee draws one of the drink-forcing cards, generate a fun message automatically.
+    if (
+      role === "referee" &&
+      ["2", "3", "Jack", "Queen", "8"].includes(nextCard.card)
+    ) {
+      const messages = refereeFunMessages[nextCard.card] || [];
+      if (messages.length > 0) {
+        const randomIndex = Math.floor(Math.random() * messages.length);
+        nextCard.description = messages[randomIndex];
+      }
+    }
+
     const roomRef = doc(db, "rooms", roomId);
     const updateData: UpdateData = {
       deck: roomData.deck.slice(1),
       currentCard: nextCard,
+      penaltyAnnouncement: "",
     };
 
     if (nextCard.action === "New Rule") {
@@ -177,9 +239,14 @@ export default function RoomPage() {
 
   const endTurn = async () => {
     if (!isMyTurn) return;
+    if (gameIsPaused) return alert("The game is currently paused.");
     const roomRef = doc(db, "rooms", roomId);
     const nextTurn = (roomData.currentTurn + 1) % roomData.players.length;
-    await updateDoc(roomRef, { currentCard: null, currentTurn: nextTurn });
+    await updateDoc(roomRef, {
+      currentCard: null,
+      currentTurn: nextTurn,
+      penaltyAnnouncement: "",
+    });
   };
 
   const chooseMate = async (mateName: string) => {
@@ -199,16 +266,50 @@ export default function RoomPage() {
   const quitRoom = () => {
     localStorage.removeItem("playerName");
     localStorage.removeItem("roomId");
+    localStorage.removeItem("playerRole");
     router.push("/lobby");
+  };
+
+  const markRuleViolation = async (playerName: string) => {
+    if (role !== "referee") return;
+    const reason = prompt(
+      "Enter a short description explaining why you're giving this violation (and what a violation means):"
+    );
+    if (!reason) return;
+    const roomRef = doc(db, "rooms", roomId);
+    const currentPenalties = roomData.penalties || {};
+    const newCount = (currentPenalties[playerName] || 0) + 1;
+    const announcement = `Referee: ${playerName} has been given a violation for "${reason}". They must drink their penalty at the end of the game.`;
+    await updateDoc(roomRef, {
+      penalties: { ...currentPenalties, [playerName]: newCount },
+      penaltyAnnouncement: announcement,
+    });
+  };
+
+  const pauseGame = async () => {
+    const reason = prompt(
+      "Enter pause reason (e.g., Toilet Break):",
+      "Toilet Break"
+    );
+    if (!reason) return;
+    const roomRef = doc(db, "rooms", roomId);
+    await updateDoc(roomRef, { isPaused: true, pauseReason: reason });
+  };
+
+  const resumeGame = async () => {
+    const roomRef = doc(db, "rooms", roomId);
+    await updateDoc(roomRef, { isPaused: false, pauseReason: "" });
   };
 
   // --- Rendering a Contextual Card Message ---
   const renderCardMessage = (): string | null => {
     if (!roomData.currentCard) return null;
-    const { card, suit, drawnBy } = roomData.currentCard;
+    const { card, suit, drawnBy, description } = roomData.currentCard;
     const cardName = `${card} of ${suit}`;
     if (drawnBy === localName) {
-      // Message for the player who drew the card.
+      if (role === "referee") {
+        return `You drew ${cardName}. ${description}`;
+      }
       switch (card) {
         case "Ace":
           return `You drew ${cardName}. Start the Waterfall—drink continuously until you decide to stop.`;
@@ -217,7 +318,7 @@ export default function RoomPage() {
         case "3":
           return `You drew ${cardName}. Choose someone to take three sips.`;
         case "4":
-          return `You drew ${cardName}. Quick, put your arm up for Heaven—the last to do so must drink.`;
+          return `You drew ${cardName}. Quick, put your arm up for Heaven—the last to do so drinks.`;
         case "5":
           return `You drew ${cardName}. Pick a category and get ready for the challenge!`;
         case "6":
@@ -237,10 +338,16 @@ export default function RoomPage() {
         case "King":
           return `You drew ${cardName}. Create a new rule for the game.`;
         default:
-          return `You drew ${cardName}. ${roomData.currentCard.description}`;
+          return `You drew ${cardName}. ${description}`;
       }
     } else {
-      // Message for other players.
+      // For other players observing the card.
+      if (
+        drawnBy === roomData.referee &&
+        ["2", "3", "Jack", "Queen", "8"].includes(card)
+      ) {
+        return `${drawnBy} is the referee. She drew ${cardName} and was asked: "${description}". Whoever she selects must drink for her.`;
+      }
       switch (card) {
         case "Ace":
           return `${drawnBy} drew ${cardName}. Get ready—the Waterfall is starting!`;
@@ -271,7 +378,7 @@ export default function RoomPage() {
             roomData.currentRule || "No rule provided."
           }`;
         default:
-          return `${drawnBy} drew ${cardName}. ${roomData.currentCard.description}`;
+          return `${drawnBy} drew ${cardName}. ${description}`;
       }
     }
   };
@@ -279,6 +386,36 @@ export default function RoomPage() {
   return (
     <div>
       <h1>Room: {roomId}</h1>
+
+      {/* Global Penalty Announcement Banner */}
+      {roomData.penaltyAnnouncement &&
+        roomData.penaltyAnnouncement.trim() !== "" && (
+          <div
+            style={{
+              marginTop: "1rem",
+              padding: "1rem",
+              backgroundColor: "#ffeeba",
+              border: "1px solid #f5c842",
+            }}
+          >
+            <strong>{roomData.penaltyAnnouncement}</strong>
+          </div>
+        )}
+
+      {/* Game Pause Banner */}
+      {roomData.isPaused && (
+        <div
+          style={{
+            marginTop: "1rem",
+            padding: "1rem",
+            backgroundColor: "#d1ecf1",
+            border: "1px solid #bee5eb",
+          }}
+        >
+          <strong>Game Paused:</strong> {roomData.pauseReason}
+        </div>
+      )}
+
       <h2>Players:</h2>
       <ul>
         {roomData.players.map((player, index) => (
@@ -286,10 +423,12 @@ export default function RoomPage() {
             key={index}
             style={{
               fontWeight: roomData.currentTurn === index ? "bold" : "normal",
+              color: player === roomData.referee ? "purple" : "inherit",
             }}
           >
             {player}
             {roomData.currentTurn === index && " ← (Current Turn)"}
+            {player === roomData.referee && " [Referee]"}
             {roomData.thumbMaster === player && " [Thumb Master]"}
             {roomData.questionMaster === player && " [Question Master]"}
             {roomData.mates && roomData.mates[player] && (
@@ -301,6 +440,31 @@ export default function RoomPage() {
           </li>
         ))}
       </ul>
+
+      {/* Global Penalty Points Panel */}
+      {roomData.penalties && Object.keys(roomData.penalties).length > 0 && (
+        <div
+          style={{
+            marginTop: "1rem",
+            border: "1px solid red",
+            padding: "0.5rem",
+          }}
+        >
+          <h3>Penalty Points</h3>
+          <ul>
+            {Object.entries(roomData.penalties).map(([player, points]) => (
+              <li key={player}>
+                {player}: {points} drink(s)
+              </li>
+            ))}
+          </ul>
+          {roomData.deck.length === 0 && (
+            <p>
+              <em>Last card! Please finish your penalty drinks.</em>
+            </p>
+          )}
+        </div>
+      )}
 
       <div style={{ marginTop: "1rem" }}>
         <p>Cards left: {roomData.deck.length}</p>
@@ -348,21 +512,10 @@ export default function RoomPage() {
           <p>No card drawn yet.</p>
         )}
 
-        {selectingMate && isMyTurn ? (
-          <div>
-            <p>Select a mate:</p>
-            {roomData.players
-              .filter((p) => p !== localName)
-              .map((p, index) => (
-                <button
-                  key={index}
-                  onClick={() => chooseMate(p)}
-                  style={{ marginRight: "0.5rem" }}
-                >
-                  {p}
-                </button>
-              ))}
-          </div>
+        {role === "observer" ? (
+          <p>You are observing the game. You cannot take actions.</p>
+        ) : gameIsPaused ? (
+          <p>Game is paused. Please wait for the referee to resume the game.</p>
         ) : isMyTurn ? (
           <div>
             {!roomData.currentCard ? (
@@ -377,7 +530,59 @@ export default function RoomPage() {
             turn.
           </p>
         )}
+
+        {selectingMate && isMyTurn && (
+          <div>
+            <p>Select a mate:</p>
+            {roomData.players
+              .filter((p) => p !== localName)
+              .map((p, index) => (
+                <button
+                  key={index}
+                  onClick={() => chooseMate(p)}
+                  style={{ marginRight: "0.5rem" }}
+                >
+                  {p}
+                </button>
+              ))}
+          </div>
+        )}
       </div>
+
+      {role === "referee" && (
+        <div
+          style={{
+            marginTop: "2rem",
+            border: "1px solid #ccc",
+            padding: "1rem",
+          }}
+        >
+          <h3>Referee Controls</h3>
+          {roomData.isPaused ? (
+            <button onClick={resumeGame} style={{ marginBottom: "1rem" }}>
+              Resume Game
+            </button>
+          ) : (
+            <button onClick={pauseGame} style={{ marginBottom: "1rem" }}>
+              Pause Game
+            </button>
+          )}
+          <p>
+            Mark a violation for a player (this assigns a penalty for the end of
+            the game):
+          </p>
+          {roomData.players
+            .filter((p) => p !== roomData.referee)
+            .map((p, index) => (
+              <div key={index} style={{ marginBottom: "0.5rem" }}>
+                <span style={{ marginRight: "1rem" }}>{p}</span>
+                <button onClick={() => markRuleViolation(p)}>
+                  Mark Violation
+                </button>
+              </div>
+            ))}
+        </div>
+      )}
     </div>
   );
 }

@@ -11,6 +11,7 @@ import {
   arrayUnion,
   collection,
   onSnapshot,
+  getDoc, // <-- new import for referee check
 } from "firebase/firestore";
 
 interface Card {
@@ -119,6 +120,7 @@ function generateRoomCode(): string {
 interface LobbyRoom {
   id: string;
   players: string[];
+  referee?: string | null;
 }
 
 export default function Lobby() {
@@ -126,6 +128,8 @@ export default function Lobby() {
   const [name, setName] = useState("");
   const [joinRoomId, setJoinRoomId] = useState("");
   const [activeLobbies, setActiveLobbies] = useState<LobbyRoom[]>([]);
+  // New state: role selection (player, referee, observer)
+  const [role, setRole] = useState<"player" | "referee" | "observer">("player");
 
   useEffect(() => {
     if (localStorage.getItem("game-auth") !== "true") {
@@ -140,6 +144,7 @@ export default function Lobby() {
       const lobbies: LobbyRoom[] = snapshot.docs.map((doc) => ({
         id: doc.id,
         players: (doc.data() as { players: string[] }).players,
+        referee: (doc.data() as any).referee || null,
       }));
       setActiveLobbies(lobbies);
     });
@@ -148,10 +153,14 @@ export default function Lobby() {
 
   const handleCreateRoom = async () => {
     if (!name) return alert("Enter your name");
+    if (role === "observer") {
+      return alert("Observers cannot create a room.");
+    }
     try {
       const roomCode = generateRoomCode();
       await setDoc(doc(db, "rooms", roomCode), {
         players: [name],
+        referee: role === "referee" ? name : null,
         currentTurn: 0,
         deck: shuffle(generateDeck()),
         currentCard: null,
@@ -159,9 +168,14 @@ export default function Lobby() {
         questionMaster: null,
         currentRule: "",
         mates: {},
+        penalties: {},
+        isPaused: false,
+        pauseReason: "",
+        penaltyAnnouncement: "",
       });
       localStorage.setItem("playerName", name);
       localStorage.setItem("roomId", roomCode);
+      localStorage.setItem("playerRole", role);
       router.push(`/room/${roomCode}`);
     } catch (error) {
       console.error("Error creating room:", error);
@@ -175,9 +189,31 @@ export default function Lobby() {
     try {
       const roomCode = joinRoomId.toUpperCase();
       const roomDocRef = doc(db, "rooms", roomCode);
-      await updateDoc(roomDocRef, { players: arrayUnion(name) });
+      if (role === "observer") {
+        // Observers simply join (they do not update the players list)
+      } else if (role === "referee") {
+        // Referees: check if a referee already exists
+        const roomSnap = await getDoc(roomDocRef);
+        if (roomSnap.exists()) {
+          const data = roomSnap.data();
+          if (data.referee && data.referee !== name) {
+            return alert("This room already has a referee.");
+          }
+          // If no referee exists, update the field and add to players list
+          await updateDoc(roomDocRef, {
+            referee: name,
+            players: arrayUnion(name),
+          });
+        } else {
+          return alert("Room not found.");
+        }
+      } else {
+        // Normal player – add to players list
+        await updateDoc(roomDocRef, { players: arrayUnion(name) });
+      }
       localStorage.setItem("playerName", name);
       localStorage.setItem("roomId", roomCode);
+      localStorage.setItem("playerRole", role);
       router.push(`/room/${roomCode}`);
     } catch (error) {
       console.error("Error joining room:", error);
@@ -193,9 +229,28 @@ export default function Lobby() {
     }
     try {
       const roomDocRef = doc(db, "rooms", roomId);
-      await updateDoc(roomDocRef, { players: arrayUnion(name) });
+      if (role === "observer") {
+        // Observers join without modifying the players list.
+      } else if (role === "referee") {
+        const roomSnap = await getDoc(roomDocRef);
+        if (roomSnap.exists()) {
+          const data = roomSnap.data();
+          if (data.referee && data.referee !== name) {
+            return alert("This room already has a referee.");
+          }
+          await updateDoc(roomDocRef, {
+            referee: name,
+            players: arrayUnion(name),
+          });
+        } else {
+          return alert("Room not found.");
+        }
+      } else {
+        await updateDoc(roomDocRef, { players: arrayUnion(name) });
+      }
       localStorage.setItem("playerName", name);
       localStorage.setItem("roomId", roomId);
+      localStorage.setItem("playerRole", role);
       router.push(`/room/${roomId}`);
     } catch (error) {
       console.error("Error joining active lobby:", error);
@@ -215,6 +270,45 @@ export default function Lobby() {
             onChange={(e) => setName(e.target.value)}
             style={{ marginRight: "1rem" }}
           />
+        </div>
+        {/* Role selection */}
+        <div style={{ marginTop: "1rem" }}>
+          <label style={{ marginRight: "1rem" }}>
+            <input
+              type="radio"
+              name="role"
+              value="player"
+              checked={role === "player"}
+              onChange={(e) =>
+                setRole(e.target.value as "player" | "referee" | "observer")
+              }
+            />{" "}
+            Player
+          </label>
+          <label style={{ marginRight: "1rem" }}>
+            <input
+              type="radio"
+              name="role"
+              value="referee"
+              checked={role === "referee"}
+              onChange={(e) =>
+                setRole(e.target.value as "player" | "referee" | "observer")
+              }
+            />{" "}
+            Referee
+          </label>
+          <label>
+            <input
+              type="radio"
+              name="role"
+              value="observer"
+              checked={role === "observer"}
+              onChange={(e) =>
+                setRole(e.target.value as "player" | "referee" | "observer")
+              }
+            />{" "}
+            Observer
+          </label>
         </div>
         <div style={{ marginTop: "1rem" }}>
           <button onClick={handleCreateRoom}>Create New Room</button>
