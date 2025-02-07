@@ -9,6 +9,7 @@ import { doc, onSnapshot, updateDoc } from "firebase/firestore";
 interface Card {
   card: string;
   action: string;
+  description: string;
 }
 
 interface RoomData {
@@ -16,6 +17,10 @@ interface RoomData {
   currentTurn: number;
   deck: Card[];
   currentCard: Card | null;
+  thumbMaster: string | null;
+  questionMaster: string | null;
+  currentRule?: string;
+  mates?: { [key: string]: string };
 }
 
 export default function RoomPage() {
@@ -25,19 +30,19 @@ export default function RoomPage() {
 
   const [roomData, setRoomData] = useState<RoomData | null>(null);
   const [localName, setLocalName] = useState<string | null>(null);
+  const [selectingMate, setSelectingMate] = useState(false);
 
-  // Load the player's name from localStorage to support reconnection
+  // Load player's name for reconnection.
   useEffect(() => {
     const name = localStorage.getItem("playerName");
     if (!name) {
-      // If the name is missing, redirect to the lobby
       router.push("/lobby");
     } else {
       setLocalName(name);
     }
   }, [router]);
 
-  // Listen for real-time updates to the room document
+  // Subscribe to room updates.
   useEffect(() => {
     if (!roomId) return;
     const roomRef = doc(db, "rooms", roomId);
@@ -56,10 +61,9 @@ export default function RoomPage() {
     return <p>Loading room data...</p>;
   }
 
-  // Determine if it is the current player's turn
   const isMyTurn = localName === roomData.players[roomData.currentTurn];
 
-  // Function to draw a card (allowed only if it's your turn and no card is drawn yet)
+  // Function to draw a card.
   const drawCard = async () => {
     if (!roomData.deck || roomData.deck.length === 0) {
       return alert("No more cards in the deck!");
@@ -68,32 +72,52 @@ export default function RoomPage() {
       return alert("It's not your turn!");
     }
     const nextCard = roomData.deck[0];
-    try {
-      const roomRef = doc(db, "rooms", roomId);
-      await updateDoc(roomRef, {
-        // Remove the drawn card from the deck and set it as the current card
-        deck: roomData.deck.slice(1),
-        currentCard: nextCard,
-      });
-    } catch (error) {
-      console.error("Error drawing card:", error);
+    const roomRef = doc(db, "rooms", roomId);
+    let updateData: any = {
+      deck: roomData.deck.slice(1),
+      currentCard: nextCard,
+    };
+
+    // Handle special actions.
+    if (nextCard.action === "New Rule") {
+      const ruleText = prompt("Enter your new rule:");
+      if (ruleText) {
+        updateData.currentRule = ruleText;
+      }
+    } else if (nextCard.action === "Mate") {
+      // Trigger mate selection UI.
+      setSelectingMate(true);
+      await updateDoc(roomRef, updateData);
+      return;
+    } else if (nextCard.action === "Thumb") {
+      updateData.thumbMaster = localName;
+    } else if (nextCard.action === "Question Master") {
+      updateData.questionMaster = localName;
     }
+    await updateDoc(roomRef, updateData);
   };
 
-  // Function to end the turn (allowed only if it's your turn and a card has been drawn)
+  // End turn normally.
   const endTurn = async () => {
     if (!isMyTurn) return;
-    try {
-      const roomRef = doc(db, "rooms", roomId);
-      // Advance the turn index, wrapping around to the first player if needed
-      const nextTurn = (roomData.currentTurn + 1) % roomData.players.length;
-      await updateDoc(roomRef, {
-        currentCard: null,
-        currentTurn: nextTurn,
-      });
-    } catch (error) {
-      console.error("Error ending turn:", error);
-    }
+    const roomRef = doc(db, "rooms", roomId);
+    const nextTurn = (roomData.currentTurn + 1) % roomData.players.length;
+    await updateDoc(roomRef, {
+      currentCard: null,
+      currentTurn: nextTurn,
+    });
+  };
+
+  // Handle mate selection.
+  const chooseMate = async (mateName: string) => {
+    const roomRef = doc(db, "rooms", roomId);
+    const updatedMates = { ...(roomData.mates || {}) };
+    updatedMates[localName!] = mateName;
+    await updateDoc(roomRef, {
+      mates: updatedMates,
+      currentCard: null,
+    });
+    setSelectingMate(false);
   };
 
   return (
@@ -108,22 +132,65 @@ export default function RoomPage() {
               fontWeight: roomData.currentTurn === index ? "bold" : "normal",
             }}
           >
-            {player} {roomData.currentTurn === index && "← (Current Turn)"}
+            {player}
+            {roomData.currentTurn === index && " ← (Current Turn)"}
+            {roomData.thumbMaster === player && " [Thumb Master]"}
+            {roomData.questionMaster === player && " [Question Master]"}
+            {roomData.mates && roomData.mates[player] && (
+              <span style={{ fontSize: "0.8rem" }}>
+                {" "}
+                (Mate: {roomData.mates[player]})
+              </span>
+            )}
           </li>
         ))}
       </ul>
+
+      <div style={{ marginTop: "1rem" }}>
+        <p>Cards left: {roomData.deck.length}</p>
+      </div>
+
+      {roomData.currentRule && (
+        <div
+          style={{
+            marginTop: "1rem",
+            padding: "0.5rem",
+            border: "1px solid black",
+          }}
+        >
+          <strong>Current Rule:</strong> {roomData.currentRule}
+        </div>
+      )}
 
       <div style={{ marginTop: "2rem" }}>
         <h2>Current Card:</h2>
         {roomData.currentCard ? (
           <div style={{ fontSize: "1.5rem", marginBottom: "1rem" }}>
-            {roomData.currentCard.card} - {roomData.currentCard.action}
+            <strong>
+              {roomData.currentCard.card} - {roomData.currentCard.action}
+            </strong>
+            <p>{roomData.currentCard.description}</p>
           </div>
         ) : (
           <p>No card drawn yet.</p>
         )}
 
-        {isMyTurn ? (
+        {selectingMate && isMyTurn ? (
+          <div>
+            <p>Select a mate:</p>
+            {roomData.players
+              .filter((p) => p !== localName)
+              .map((p, index) => (
+                <button
+                  key={index}
+                  onClick={() => chooseMate(p)}
+                  style={{ marginRight: "0.5rem" }}
+                >
+                  {p}
+                </button>
+              ))}
+          </div>
+        ) : isMyTurn ? (
           <div>
             {!roomData.currentCard ? (
               <button onClick={drawCard}>Draw Card</button>
