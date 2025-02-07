@@ -65,28 +65,28 @@ export default function RoomPage() {
   // Predefined fun messages for referee drink cards.
   const refereeFunMessages: { [key: string]: string[] } = {
     "2": [
-      "Who swore the most in your opinion? That person drinks!",
-      "Who has been the most aggressive? That person takes a drink!",
-      "Who took the longest to answer? They drink!",
-      "Who needs a timeout? They must drink!",
+      "Who do you think has been the loudest or most over-the-top in this game? Pick them to drink.",
+      "Who do you think has been the biggest complainer this game? They drink.",
+      "Who do you think hesitates the most before making a decision? Give them a drink.",
+      "Who do you think has been the least lucky in this game? Let them drink their sorrows away.",
     ],
     "3": [
-      "Who owes you a compliment? That person drinks!",
-      "Who is the class clown tonight? They take a drink!",
-      "Who needs to lighten up? They drink!",
+      "Who do you think has been roasting people the most? Pick them to drink.",
+      "Who do you think has been making people laugh the hardest, intentionally or not? They drink.",
+      "Who do you think is taking this game the most seriously? Time to balance it out with a drink.",
     ],
     Jack: [
-      "Who had the worst dance moves? They drink!",
-      "Who is the biggest chatterbox? They take a drink!",
+      "Who do you think is getting away with drinking the least? Time for them to catch up.",
+      "Who do you think keeps disappearing the most? Bring them back with a drink.",
     ],
     Queen: [
-      "Who is the life of the party? They drink!",
-      "Who told the worst joke? They take a sip!",
+      "Who do you think has the worst luck in this game? Give them a drink.",
+      "Who do you think secretly enjoys the attention the most? Time for a sip.",
     ],
     "8": [
-      "Who swore the most last round? They drink!",
-      "Who acted the wildest? They drink!",
-      "Who took too long to get ready? They drink!",
+      "Who do you think has been swearing the most? They drink.",
+      "Who do you think is trying too hard to stay sober? Make them drink.",
+      "Who do you think would be the worst designated driver right now? Pick them to drink.",
     ],
   };
 
@@ -246,7 +246,9 @@ export default function RoomPage() {
     };
 
     if (nextCard.action === "New Rule") {
-      const ruleText = prompt("Enter your new rule:");
+      const ruleText = prompt(
+        "You picked out the Rule Card! Enter your new rule:"
+      );
       if (ruleText) {
         updateData.currentRule = ruleText;
       }
@@ -415,32 +417,32 @@ export default function RoomPage() {
       }
       switch (card) {
         case "Ace":
-          return `You drew ${cardName}. Start the Waterfall—drink continuously until you decide to stop.`;
+          return `You drew ${cardName}. Start the Waterfall—drink continuously until you decide to stop. Everyone must do the same`;
         case "2":
-          return `You drew ${cardName}. You must take two sips.`;
+          return `You drew ${cardName}. Take two drinks.`;
         case "3":
-          return `You drew ${cardName}. Choose someone to take three sips.`;
+          return `You drew ${cardName}. Choose someone to take three drinks.`;
         case "4":
-          return `You drew ${cardName}. Quick, put your arm up for Heaven—the last to do so drinks.`;
+          return `You drew ${cardName}. PUT YOUR ARM UP. The last to do so drinks.`;
         case "5":
-          return `You drew ${cardName}. Pick a category and get ready for the challenge!`;
+          return `You drew ${cardName}. Pick a category. Then go in room order starting with yourself.`;
         case "6":
-          return `You drew ${cardName}. Choose someone to be your mate!`;
+          return `You drew ${cardName}. Choose someone to be your mate and to drink along side you`;
         case "7":
-          return `You drew ${cardName}. You're now the Thumb Master—start raising your thumb!`;
+          return `You drew ${cardName}. You're now the Thumb Master`;
         case "8":
           return `You drew ${cardName}. You must take a drink.`;
         case "9":
-          return `You drew ${cardName}. Start the rhyme challenge—say a word, and everyone must follow.`;
+          return `You drew ${cardName}. Say a sentence that rhymes. Then go in room order and everyone must rhyme with that sentence.`;
         case "10":
-          return `You drew ${cardName}. You're now the Question Master—start asking questions!`;
+          return `You drew ${cardName}. You're now the Question Master.`;
         case "Jack":
           return `You drew ${cardName}. You must take a drink.`;
         case "Queen":
           return `You drew ${cardName}. You must take a drink.`;
         case "King":
           return `You drew ${cardName} and created a new rule: ${
-            roomData.currentRule || "No rule provided."
+            roomData.currentRule || "No rule provided. What a mong"
           }`;
         default:
           return `You drew ${cardName}. ${description}`;
@@ -454,25 +456,25 @@ export default function RoomPage() {
       }
       switch (card) {
         case "Ace":
-          return `${drawnBy} drew ${cardName}. Get ready—the Waterfall is starting!`;
+          return `${drawnBy} drew ${cardName}. Get ready for a waterfall.`;
         case "2":
-          return `${drawnBy} drew ${cardName}. They must take two sips.`;
+          return `${drawnBy} drew ${cardName}. They've gotta drink twice`;
         case "3":
-          return `${drawnBy} drew ${cardName}. They will choose someone to take three sips.`;
+          return `${drawnBy} drew ${cardName}. They choose someone to take three drinks.`;
         case "4":
-          return `${drawnBy} drew ${cardName}. Quick—watch as they put their arm up for Heaven!`;
+          return `${drawnBy} drew ${cardName}. PUT YOUR ARM UP, last to do it has to drink`;
         case "5":
-          return `${drawnBy} drew ${cardName}. Prepare for a category challenge!`;
+          return `${drawnBy} drew ${cardName}. Categories time`;
         case "6":
           return `${drawnBy} drew ${cardName} and is choosing a mate.`;
         case "7":
-          return `${drawnBy} drew ${cardName} and is now the Thumb Master!`;
+          return `${drawnBy} drew ${cardName} and is now the Thumb Master.`;
         case "8":
           return `${drawnBy} drew ${cardName}. They must take a drink.`;
         case "9":
-          return `${drawnBy} drew ${cardName}. A rhyme challenge is on!`;
+          return `${drawnBy} drew ${cardName}. It's pog sussy rhyme time. Going in room order, rhyme with the last sentence.`;
         case "10":
-          return `${drawnBy} drew ${cardName} and is now the Question Master!`;
+          return `${drawnBy} drew ${cardName} and is now the Question Master`;
         case "Jack":
           return `${drawnBy} drew ${cardName}. They must take a drink.`;
         case "Queen":
