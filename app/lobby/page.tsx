@@ -36,6 +36,11 @@ interface CardType {
   description: string;
 }
 
+interface LobbyRoomData {
+  players: string[];
+  referee?: string | null;
+}
+
 const cardMapping: { [key: string]: { action: string; description: string } } =
   {
     Ace: {
@@ -161,11 +166,15 @@ export default function Lobby() {
   useEffect(() => {
     const roomsRef = collection(db, "rooms");
     const unsubscribe = onSnapshot(roomsRef, (snapshot) => {
-      const lobbies: LobbyRoom[] = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        players: (doc.data() as { players: string[] }).players,
-        referee: (doc.data() as any).referee || null,
-      }));
+      const lobbies: LobbyRoom[] = snapshot.docs.map((doc) => {
+        const data = doc.data() as LobbyRoomData;
+        return {
+          id: doc.id,
+          players: data.players,
+          referee: data.referee || null,
+        };
+      });
+
       setActiveLobbies(lobbies);
     });
     return () => unsubscribe();

@@ -3,13 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { db } from "@/lib/firebase";
-import {
-  doc,
-  onSnapshot,
-  updateDoc,
-  getDoc,
-  arrayRemove,
-} from "firebase/firestore";
+import { doc, onSnapshot, updateDoc } from "firebase/firestore";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
@@ -49,6 +43,20 @@ interface UpdateData {
   isPaused?: boolean;
   pauseReason?: string;
   penaltyAnnouncement?: string;
+  // Add the properties you are updating:
+  players?: string[];
+  currentTurn?: number;
+  referee?: string | null;
+  // Allow additional keys whose values can be one of these types:
+  [key: string]:
+    | CardType[]
+    | CardType
+    | null
+    | string
+    | boolean
+    | number
+    | string[]
+    | undefined;
 }
 
 export default function RoomPage() {
@@ -277,19 +285,19 @@ export default function RoomPage() {
   };
 
   // Updates the players array and adjusts currentTurn if needed.
-  const updatePlayersAfterRemoval = async (newPlayers: string[]) => {
-    const roomRef = doc(db, "rooms", roomId);
-    let newCurrentTurn = roomData!.currentTurn;
-    if (newPlayers.length > 0) {
-      newCurrentTurn = newCurrentTurn % newPlayers.length;
-    } else {
-      newCurrentTurn = 0;
-    }
-    await updateDoc(roomRef, {
-      players: newPlayers,
-      currentTurn: newCurrentTurn,
-    });
-  };
+  // const updatePlayersAfterRemoval = async (newPlayers: string[]) => {
+  //   const roomRef = doc(db, "rooms", roomId);
+  //   let newCurrentTurn = roomData!.currentTurn;
+  //   if (newPlayers.length > 0) {
+  //     newCurrentTurn = newCurrentTurn % newPlayers.length;
+  //   } else {
+  //     newCurrentTurn = 0;
+  //   }
+  //   await updateDoc(roomRef, {
+  //     players: newPlayers,
+  //     currentTurn: newCurrentTurn,
+  //   });
+  // };
 
   // Function for a player to leave the game voluntarily.
   const handleLeaveGame = async () => {
@@ -309,7 +317,7 @@ export default function RoomPage() {
         }
       }
       const roomRef = doc(db, "rooms", roomId);
-      const updateData: any = {
+      const updateData: UpdateData = {
         players: newPlayers,
         currentTurn: newCurrentTurn,
       };
@@ -357,7 +365,9 @@ export default function RoomPage() {
 
   const chooseMate = async (mateName: string) => {
     const roomRef = doc(db, "rooms", roomId);
-    const updatedMates = { ...(roomData.mates || {}) };
+    const updatedMates: { [key: string]: string } = {
+      ...(roomData.mates ?? {}),
+    };
     updatedMates[localName!] = mateName;
     await updateDoc(roomRef, { mates: updatedMates, currentCard: null });
     setSelectingMate(false);
