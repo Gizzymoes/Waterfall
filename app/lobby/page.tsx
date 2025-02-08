@@ -18,8 +18,6 @@ import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { motion, AnimatePresence } from "framer-motion";
 
-// Removed: import LoadingScreen from "@/components/LoadingScreen";
-
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import {
   AlertDialog,
@@ -42,16 +40,63 @@ const cardMapping: { [key: string]: { action: string; description: string } } =
   {
     Ace: {
       action: "Waterfall",
-      description: "An Ace has been drawn. It's waterfall time...",
+      description:
+        "An Ace has been drawn. It's waterfall time. You must drink and you can stop whenever you want. Everyone else has to drink as you do, and can only stop when you do.",
     },
     "2": {
-      action: "Waterfall",
-      description: "A 2 has been drawn. Some example...",
+      action: "Take a Drink",
+      description: "A 2 has been drawn. Take two sips.",
     },
-    // ... rest of your mapping
+    "3": {
+      action: "Give 2",
+      description: "A 3 has been drawn. Choose someone to take 3 sips.",
+    },
+    "4": {
+      action: "Heaven",
+      description:
+        "A 4 has been drawn. PUT YOUR ARM UP. The last person to do so must drink.",
+    },
+    "5": {
+      action: "Categories",
+      description:
+        "A 5 has been drawn. Choose a category and everyone must name something in that category. The first to fail, or say it too slow, drinks.",
+    },
+    "6": {
+      action: "Mate",
+      description:
+        "A 6 has been drawn. Choose a mate. When you drink, they drink too. If they are already someone's mate, they will be reassigned.",
+    },
+    "7": {
+      action: "Thumb",
+      description:
+        "A 7 has been drawn. You are now the Thumb Master. Raise your thumb at any time and others must follow. The last to do so drinks.",
+    },
+    "8": {
+      action: "Lads Drink",
+      description: "An 8 has been drawn. Lads, take a drink.",
+    },
+    "9": {
+      action: "Epic sussy Ryan Rhyme time",
+      description:
+        "A 9 has been drawn. Say a word and everyone else must say a word that rhymes. The first to fail drinks.",
+    },
+    "10": {
+      action: "Question Master",
+      description:
+        "A 10 has been drawn. You are now the Question Master. Anyone who answers your questions must drink until a new Question Master is designated.",
+    },
+    Jack: {
+      action: "Take a Drink",
+      description: "A Jack has been drawn. Take a drink.",
+    },
+    Queen: {
+      action: "Take a Drink",
+      description: "A Queen has been drawn. Take a drink.",
+    },
     King: {
       action: "New Rule",
-      description: "A King has been drawn. Create a new rule...",
+      description:
+        "A King has been drawn. Create a new rule for the game. Enter the rule text, and everyone must follow it or drink.",
     },
   };
 
@@ -98,8 +143,6 @@ export default function Lobby() {
   const [joinRoomId, setJoinRoomId] = useState("");
   const [activeLobbies, setActiveLobbies] = useState<LobbyRoom[]>([]);
   const [role, setRole] = useState<"player" | "referee" | "observer">("player");
-
-  // Removed: const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
 
   // Confirmation dialog state
@@ -131,7 +174,6 @@ export default function Lobby() {
   // Actually creates a new room.
   const actuallyCreateRoom = async () => {
     try {
-      // Removed: setIsLoading(true);
       const roomCode = generateRoomCode();
       await setDoc(doc(db, "rooms", roomCode), {
         players: [name],
@@ -152,12 +194,10 @@ export default function Lobby() {
       localStorage.setItem("roomId", roomCode);
       localStorage.setItem("playerRole", role);
 
-      // Navigate to the new room
       router.push(`/room/${roomCode}`);
     } catch (error) {
       console.error("Error creating room:", error);
       setError("Error creating room. Please try again.");
-      // Removed: setIsLoading(false);
     }
   };
 
@@ -181,7 +221,6 @@ export default function Lobby() {
       return setError("Enter both your name and a valid room ID");
     }
     try {
-      // Removed: setIsLoading(true);
       const roomCode = joinRoomId.toUpperCase();
       const roomDocRef = doc(db, "rooms", roomCode);
 
@@ -202,19 +241,16 @@ export default function Lobby() {
           return setError("Room not found.");
         }
       } else {
-        // Normal player
         await updateDoc(roomDocRef, { players: arrayUnion(name) });
       }
       localStorage.setItem("playerName", name);
       localStorage.setItem("roomId", roomCode);
       localStorage.setItem("playerRole", role);
 
-      // Navigate
       router.push(`/room/${roomCode}`);
     } catch (error) {
       console.error("Error joining room:", error);
       setError("Failed to join room. Please check the room ID.");
-      // Removed: setIsLoading(false);
     }
   };
 
@@ -225,7 +261,6 @@ export default function Lobby() {
       return;
     }
     try {
-      // Removed: setIsLoading(true);
       const roomDocRef = doc(db, "rooms", roomId);
 
       if (role === "observer") {
@@ -245,23 +280,19 @@ export default function Lobby() {
           return setError("Room not found.");
         }
       } else {
-        // Normal player
         await updateDoc(roomDocRef, { players: arrayUnion(name) });
       }
       localStorage.setItem("playerName", name);
       localStorage.setItem("roomId", roomId);
       localStorage.setItem("playerRole", role);
 
-      // Navigate
       router.push(`/room/${roomId}`);
     } catch (error) {
       console.error("Error joining active lobby:", error);
       setError("Failed to join active lobby. Please try again.");
-      // Removed: setIsLoading(false);
     }
   };
 
-  // Framer Motion variants for the error alert
   const errorVariants = {
     hidden: { opacity: 0, y: -10 },
     visible: { opacity: 1, y: 0 },
@@ -270,9 +301,7 @@ export default function Lobby() {
 
   return (
     <>
-      {/* We no longer wrap everything with "isLoading && <LoadingScreen />" */}
       <AnimatePresence>
-        {/* Lobby Content */}
         <motion.div
           key="lobby-content"
           initial={{ opacity: 0 }}
@@ -280,7 +309,11 @@ export default function Lobby() {
           exit={{ opacity: 0 }}
           className="container mx-auto p-4"
         >
-          <AnimatePresence>
+          <div className="max-w-3xl mx-auto">
+            <h1 className="text-3xl font-bold text-center mb-8">
+              Multiplayer Lobby
+            </h1>
+
             {error && (
               <motion.div
                 variants={errorVariants}
@@ -288,7 +321,7 @@ export default function Lobby() {
                 animate="visible"
                 exit="exit"
                 transition={{ duration: 0.3 }}
-                className="mb-4"
+                className="mb-6"
               >
                 <Alert
                   variant="destructive"
@@ -301,125 +334,143 @@ export default function Lobby() {
                 </Alert>
               </motion.div>
             )}
-          </AnimatePresence>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            <motion.div
-              initial={{ x: -50, opacity: 0 }}
-              animate={{ x: 0, opacity: 1 }}
-              className="space-y-4"
-            >
-              <Card className="p-6 rounded-xl border shadow-sm overflow-hidden">
-                <h1 className="text-2xl font-bold mb-4">Lobby</h1>
+            {/* Common inputs for name and role */}
+            <div className="mb-8">
+              <Label
+                htmlFor="name"
+                className="block text-sm font-medium text-gray-700 mb-1"
+              >
+                Your Name
+              </Label>
+              <Input
+                id="name"
+                type="text"
+                placeholder="Enter your name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                className="w-full rounded-md border border-gray-300 shadow-sm"
+              />
+            </div>
+
+            <div className="mb-8">
+              <p className="text-sm font-medium text-gray-700 mb-1">
+                Select Role
+              </p>
+              <div className="flex items-center space-x-4">
+                <label className="flex items-center space-x-2">
+                  <input
+                    type="radio"
+                    name="role"
+                    value="player"
+                    checked={role === "player"}
+                    onChange={(e) =>
+                      setRole(
+                        e.target.value as "player" | "referee" | "observer"
+                      )
+                    }
+                    className="form-radio text-blue-500"
+                  />
+                  <span className="text-sm">Player</span>
+                </label>
+                <label className="flex items-center space-x-2">
+                  <input
+                    type="radio"
+                    name="role"
+                    value="referee"
+                    checked={role === "referee"}
+                    onChange={(e) =>
+                      setRole(
+                        e.target.value as "player" | "referee" | "observer"
+                      )
+                    }
+                    className="form-radio text-blue-500"
+                  />
+                  <span className="text-sm">Referee</span>
+                </label>
+                <label className="flex items-center space-x-2">
+                  <input
+                    type="radio"
+                    name="role"
+                    value="observer"
+                    checked={role === "observer"}
+                    onChange={(e) =>
+                      setRole(
+                        e.target.value as "player" | "referee" | "observer"
+                      )
+                    }
+                    className="form-radio text-blue-500"
+                  />
+                  <span className="text-sm">Observer</span>
+                </label>
+              </div>
+              {role === "observer" && (
+                <p className="mt-1 text-xs text-red-500">
+                  Observers cannot create a room.
+                </p>
+              )}
+            </div>
+
+            {/* Action cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              <Card className="p-6">
+                <h2 className="text-xl font-bold mb-4">Create a Room</h2>
+                <p className="text-sm text-gray-600 mb-4">
+                  Start a new room to play with friends.
+                </p>
+                <Button
+                  onClick={handleCreateRoom}
+                  variant="outline"
+                  className="w-full"
+                >
+                  Create Room
+                </Button>
+              </Card>
+
+              <Card className="p-6">
+                <h2 className="text-xl font-bold mb-4">Join a Room</h2>
                 <div className="mb-4">
-                  <Label htmlFor="name" className="block mb-1">
-                    Your Name
+                  <Label
+                    htmlFor="join-room"
+                    className="block text-sm font-medium text-gray-700 mb-1"
+                  >
+                    Room ID
                   </Label>
                   <Input
-                    id="name"
+                    id="join-room"
                     type="text"
-                    placeholder="Your name"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    className="w-full rounded-xl border border-gray-300 shadow-sm"
+                    placeholder="Enter room code"
+                    value={joinRoomId}
+                    onChange={(e) => setJoinRoomId(e.target.value)}
+                    className="w-full rounded-md border border-gray-300 shadow-sm"
                   />
                 </div>
-                <div className="mb-4">
-                  <Button
-                    onClick={handleCreateRoom}
-                    className="w-full rounded-xl"
-                    variant="outline"
-                  >
-                    Create New Room
-                  </Button>
-                </div>
-                <div className="mb-4">
-                  <p className="mb-1">Select Role:</p>
-                  <div className="flex items-center space-x-4">
-                    <label className="flex items-center space-x-2">
-                      <input
-                        type="radio"
-                        name="role"
-                        value="player"
-                        checked={role === "player"}
-                        onChange={(e) =>
-                          setRole(
-                            e.target.value as "player" | "referee" | "observer"
-                          )
-                        }
-                        className="form-radio text-blue-500"
-                      />
-                      <span className="text-sm font-medium">Player</span>
-                    </label>
-                    <label className="flex items-center space-x-2">
-                      <input
-                        type="radio"
-                        name="role"
-                        value="referee"
-                        checked={role === "referee"}
-                        onChange={(e) =>
-                          setRole(
-                            e.target.value as "player" | "referee" | "observer"
-                          )
-                        }
-                        className="form-radio text-blue-500"
-                      />
-                      <span className="text-sm font-medium">Referee</span>
-                    </label>
-                    <label className="flex items-center space-x-2">
-                      <input
-                        type="radio"
-                        name="role"
-                        value="observer"
-                        checked={role === "observer"}
-                        onChange={(e) =>
-                          setRole(
-                            e.target.value as "player" | "referee" | "observer"
-                          )
-                        }
-                        className="form-radio text-blue-500"
-                      />
-                      <span className="text-sm font-medium">Observer</span>
-                    </label>
-                  </div>
-                </div>
-
-                <div className="mb-4">
-                  <div className="flex space-x-2">
-                    <Input
-                      type="text"
-                      placeholder="Room ID to join"
-                      value={joinRoomId}
-                      onChange={(e) => setJoinRoomId(e.target.value)}
-                      className="flex-1 rounded-xl border border-gray-300 shadow-sm"
-                    />
-                    <Button
-                      onClick={handleJoinRoom}
-                      variant="outline"
-                      className="rounded-xl"
-                    >
-                      Join Room
-                    </Button>
-                  </div>
-                </div>
+                <Button
+                  onClick={handleJoinRoom}
+                  variant="outline"
+                  className="w-full"
+                >
+                  Join Room
+                </Button>
               </Card>
-            </motion.div>
-            <motion.div
-              initial={{ x: 50, opacity: 0 }}
-              animate={{ x: 0, opacity: 1 }}
-            >
-              <Card className="p-6 rounded-xl border shadow-sm overflow-hidden">
+            </div>
+
+            {/* Active lobbies */}
+            <div className="mt-8">
+              <Card className="p-6">
                 <h2 className="text-xl font-bold mb-4">Active Lobbies</h2>
                 {activeLobbies.length === 0 ? (
-                  <p>No active lobbies.</p>
+                  <p className="text-sm text-gray-600">
+                    No active lobbies available.
+                  </p>
                 ) : (
                   <ul className="space-y-2">
                     {activeLobbies.map((lobby, index) => (
                       <li
                         key={`lobby-${lobby.id || "empty"}-${index}`}
-                        className="flex items-center justify-between"
+                        className="flex items-center justify-between border-b border-gray-200 py-2"
                       >
-                        <span>
+                        <span className="text-sm font-medium">
                           <strong>{lobby.id || "Unknown"}</strong> (
                           {lobby.players.length} players)
                         </span>
@@ -427,7 +478,7 @@ export default function Lobby() {
                           size="sm"
                           onClick={() => handleJoinActiveLobby(lobby.id)}
                           variant="outline"
-                          className="rounded-xl"
+                          className="rounded-md"
                         >
                           Join
                         </Button>
@@ -436,11 +487,12 @@ export default function Lobby() {
                   </ul>
                 )}
               </Card>
-            </motion.div>
+            </div>
           </div>
         </motion.div>
       </AnimatePresence>
 
+      {/* Confirmation Dialog */}
       <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>

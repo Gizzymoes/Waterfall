@@ -1,7 +1,6 @@
-// app/room/[roomId]/page.tsx
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { db } from "@/lib/firebase";
 import {
@@ -135,7 +134,7 @@ export default function RoomPage() {
     }
   }, [roomData?.penaltyAnnouncement, roomId]);
 
-  // NEW: Scroll to top when a violation occurs or game is paused.
+  // Scroll to top when a violation occurs or game is paused.
   useEffect(() => {
     if (
       (roomData?.penaltyAnnouncement &&
@@ -146,7 +145,8 @@ export default function RoomPage() {
     }
   }, [roomData?.penaltyAnnouncement, roomData?.isPaused]);
 
-  if (!roomData) return <p>Loading room data...</p>;
+  if (!roomData)
+    return <p className="text-center py-10 text-lg">Loading room data...</p>;
 
   const gameIsPaused = roomData.isPaused;
   const isMyTurn = localName === roomData.players[roomData.currentTurn];
@@ -494,124 +494,275 @@ export default function RoomPage() {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="container mx-auto p-4 space-y-6"
+      className="max-w-7xl mx-auto px-4 py-6 space-y-8"
     >
+      {/* Header */}
       <motion.h1
         initial={{ y: -20, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
-        className="text-3xl font-bold"
+        className="text-4xl font-bold text-center md:text-left"
       >
         Room: {roomId}
       </motion.h1>
 
       {/* Animated Alerts for Violation & Pause */}
-      <AnimatePresence>
-        {roomData.penaltyAnnouncement &&
-          roomData.penaltyAnnouncement.trim() !== "" && (
+      <div className="space-y-4">
+        <AnimatePresence>
+          {roomData.penaltyAnnouncement &&
+            roomData.penaltyAnnouncement.trim() !== "" && (
+              <motion.div
+                key="penaltyAnnouncement"
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ duration: 0.3 }}
+              >
+                <Alert
+                  variant="destructive"
+                  className="border-2 border-red-600 shadow-lg"
+                >
+                  <AlertTitle className="font-bold text-red-700">
+                    Violation!
+                  </AlertTitle>
+                  <AlertDescription>
+                    {roomData.penaltyAnnouncement}
+                  </AlertDescription>
+                </Alert>
+              </motion.div>
+            )}
+        </AnimatePresence>
+
+        <AnimatePresence>
+          {roomData.isPaused && (
             <motion.div
-              key="penaltyAnnouncement"
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
+              key="pausedGame"
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
               transition={{ duration: 0.3 }}
             >
               <Alert
-                variant="destructive"
-                className="mt-4 border-2 border-red-600 shadow-lg"
+                variant="default"
+                className="border-2 border-blue-600 shadow-lg"
               >
-                <AlertTitle className="font-bold text-red-700">
-                  Violation!
+                <AlertTitle className="font-bold text-blue-700">
+                  Game Paused:
                 </AlertTitle>
-                <AlertDescription>
-                  {roomData.penaltyAnnouncement}
-                </AlertDescription>
+                <AlertDescription>{roomData.pauseReason}</AlertDescription>
               </Alert>
             </motion.div>
           )}
-      </AnimatePresence>
+        </AnimatePresence>
+      </div>
 
-      <AnimatePresence>
-        {roomData.isPaused && (
+      {/* Main Grid Layout */}
+      <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
+        {/* Left Column: Players List & Penalty Points */}
+        <div className="space-y-8">
+          {/* Players List */}
           <motion.div
-            key="pausedGame"
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.9 }}
-            transition={{ duration: 0.3 }}
+            initial={{ x: -20, opacity: 0 }}
+            animate={{ x: 0, opacity: 1 }}
           >
-            <Alert
-              variant="default"
-              className="mt-4 border-2 border-blue-600 shadow-lg"
-            >
-              <AlertTitle className="font-bold text-blue-700">
-                Game Paused:
-              </AlertTitle>
-              <AlertDescription>{roomData.pauseReason}</AlertDescription>
-            </Alert>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Players List (names are white by default; referee name in blue) */}
-      <motion.div
-        initial={{ x: -20, opacity: 0 }}
-        animate={{ x: 0, opacity: 1 }}
-      >
-        <Card className="p-6">
-          <h2 className="text-2xl font-bold mb-4">Players</h2>
-          <ul className="space-y-2">
-            {roomData.players.map((player, index) => (
-              <li
-                key={`player-${player || "empty"}-${index}`}
-                className="flex flex-col sm:flex-row items-start sm:items-center"
-              >
-                <span
-                  className={`font-bold text-white ${
-                    player === roomData.referee ? "text-blue-600" : ""
-                  }`}
-                >
-                  {player}
-                </span>
-                <div className="flex flex-wrap gap-1 mt-1 sm:mt-0 sm:ml-2">
-                  {roomData.currentTurn === index && (
-                    <span className="px-2 py-0.5 bg-green-200 text-green-700 rounded text-xs">
-                      Current Turn
+            <Card className="p-6 rounded-xl shadow-lg">
+              <h2 className="text-2xl font-bold mb-4">Players</h2>
+              <ul className="space-y-2">
+                {roomData.players.map((player, index) => (
+                  <li
+                    key={`player-${player || "empty"}-${index}`}
+                    className="flex flex-col sm:flex-row items-start sm:items-center"
+                  >
+                    <span
+                      className={`font-bold ${
+                        player === roomData.referee ? "text-blue-600" : "white"
+                      }`}
+                    >
+                      {player}
                     </span>
-                  )}
-                  {player === roomData.referee && (
-                    <span className="px-2 py-0.5 bg-blue-200 text-blue-700 rounded text-xs">
-                      Referee
-                    </span>
-                  )}
-                  {roomData.thumbMaster === player && (
-                    <span className="px-2 py-0.5 bg-purple-200 text-purple-700 rounded text-xs">
-                      Thumb Master
-                    </span>
-                  )}
-                  {roomData.questionMaster === player && (
-                    <span className="px-2 py-0.5 bg-orange-200 text-orange-700 rounded text-xs">
-                      Question Master
-                    </span>
-                  )}
-                  {roomData.mates && roomData.mates[player] && (
-                    <span className="px-2 py-0.5 bg-gray-200 text-gray-700 rounded text-xs">
-                      Mate: {roomData.mates[player]}
-                    </span>
-                  )}
+                    <div className="flex flex-wrap gap-1 mt-1 sm:mt-0 sm:ml-2">
+                      {roomData.currentTurn === index && (
+                        <span className="px-2 py-0.5 bg-green-200 text-green-700 rounded text-xs">
+                          Current Turn
+                        </span>
+                      )}
+                      {player === roomData.referee && (
+                        <span className="px-2 py-0.5 bg-blue-200 text-blue-700 rounded text-xs">
+                          Referee
+                        </span>
+                      )}
+                      {roomData.thumbMaster === player && (
+                        <span className="px-2 py-0.5 bg-purple-200 text-purple-700 rounded text-xs">
+                          Thumb Master
+                        </span>
+                      )}
+                      {roomData.questionMaster === player && (
+                        <span className="px-2 py-0.5 bg-orange-200 text-orange-700 rounded text-xs">
+                          Question Master
+                        </span>
+                      )}
+                      {roomData.mates && roomData.mates[player] && (
+                        <span className="px-2 py-0.5 bg-gray-200 text-gray-700 rounded text-xs">
+                          Mate: {roomData.mates[player]}
+                        </span>
+                      )}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+              {role !== "observer" && (
+                <div className="text-center mt-4">
+                  <Button variant="destructive" onClick={handleLeaveGame}>
+                    Leave Game
+                  </Button>
                 </div>
-              </li>
-            ))}
-          </ul>
-          {/* Button for the current player to leave the game */}
-          {role !== "observer" && (
-            <div className="text-center mt-4">
-              <Button variant="destructive" onClick={handleLeaveGame}>
-                Leave Game
-              </Button>
-            </div>
-          )}
-        </Card>
-      </motion.div>
+              )}
+            </Card>
+          </motion.div>
+
+          {/* Penalty Points */}
+          <motion.div
+            initial={{ x: -20, opacity: 0 }}
+            animate={{ x: 0, opacity: 1 }}
+          >
+            <Card className="p-6 rounded-xl shadow-lg">
+              <h2 className="text-xl font-semibold mb-2">Penalty Points</h2>
+              {roomData.penalties &&
+              Object.keys(roomData.penalties).length > 0 ? (
+                <ul className="list-disc list-inside space-y-1">
+                  {Object.entries(roomData.penalties).map(
+                    ([player, points]) => (
+                      <li key={`penalty-${player}`}>
+                        {player}: {points} drink(s)
+                      </li>
+                    )
+                  )}
+                </ul>
+              ) : (
+                <p>No penalties yet.</p>
+              )}
+              {roomData.deck.length === 0 && (
+                <p className="mt-2 italic text-sm">
+                  Last card! Please finish your penalty drinks.
+                </p>
+              )}
+            </Card>
+          </motion.div>
+        </div>
+
+        {/* Right Column: Current Card, Game Controls & Cards Remaining */}
+        <div className="space-y-8">
+          {/* Current Card Section */}
+          <motion.div
+            initial={{ scale: 0.8, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+          >
+            <Card className="p-6 rounded-xl shadow-lg">
+              <h2 className="text-2xl font-bold mb-4">Current Card</h2>
+              <div className="relative min-h-[300px] md:min-h-[500px]">
+                <AnimatePresence>
+                  {roomData.currentCard ? (
+                    <motion.div
+                      key="current-card"
+                      layout
+                      className="static md:absolute md:inset-0 flex flex-col items-center justify-center space-y-4"
+                      initial={{ y: -30, opacity: 0 }}
+                      animate={{ y: 0, opacity: 1 }}
+                      exit={{ y: 30, opacity: 0 }}
+                    >
+                      <AnimatedCard
+                        card={roomData.currentCard.card}
+                        suit={roomData.currentCard.suit}
+                        className="mb-4"
+                      />
+                      <p className="text-center text-lg break-words">
+                        {renderCardMessage()}
+                      </p>
+                    </motion.div>
+                  ) : (
+                    <motion.div
+                      key="no-card"
+                      layout
+                      className="static md:absolute md:inset-0 flex flex-col items-center justify-center text-center text-gray-500"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                    >
+                      <p className="mb-4">Your card will appear here.</p>
+                      {isMyTurn && (
+                        <Button
+                          onClick={drawCard}
+                          className="mx-auto w-full md:w-auto"
+                        >
+                          Draw Card
+                        </Button>
+                      )}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            </Card>
+          </motion.div>
+
+          {/* Game Controls */}
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="flex flex-col items-center space-y-4"
+          >
+            {role === "observer" ? (
+              <Card className="p-6 rounded-xl shadow-lg">
+                <p>You are observing the game. You cannot take actions.</p>
+              </Card>
+            ) : gameIsPaused ? (
+              <Card className="p-6 rounded-xl shadow-lg">
+                <p>
+                  Game is paused. Please wait for the referee to resume the
+                  game.
+                </p>
+              </Card>
+            ) : isMyTurn ? (
+              <div className="flex flex-col items-center space-y-4">
+                {!roomData.currentCard ? (
+                  <Button onClick={drawCard} className="w-full md:w-auto">
+                    Draw Card
+                  </Button>
+                ) : (
+                  <Button onClick={endTurn} className="w-full md:w-auto">
+                    End Turn
+                  </Button>
+                )}
+              </div>
+            ) : (
+              <Card className="p-6 rounded-xl shadow-lg">
+                <p>
+                  Waiting for {roomData.players[roomData.currentTurn]} to take
+                  their turn.
+                </p>
+              </Card>
+            )}
+
+            {roomData.deck.length === 0 && (
+              <div className="flex flex-col md:flex-row items-center gap-4">
+                <Button onClick={resetRound}>Reset Round</Button>
+                <Button variant="destructive" onClick={quitRoom}>
+                  Quit Room
+                </Button>
+              </div>
+            )}
+          </motion.div>
+
+          {/* Cards Remaining Info */}
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="text-center"
+          >
+            <p className="text-lg font-semibold">
+              Cards Remaining: {roomData.deck.length}
+            </p>
+          </motion.div>
+        </div>
+      </div>
 
       {/* Referee Controls */}
       {role === "referee" && (
@@ -622,7 +773,7 @@ export default function RoomPage() {
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 20, opacity: 0 }}
           >
-            <Card className="p-6 border-2 border-gray-300 shadow-md bg-gray-50">
+            <Card className="p-6 rounded-xl shadow-lg bg-gray-50 border border-gray-200">
               <h3 className="text-2xl font-bold mb-4 text-gray-800">
                 Referee Controls
               </h3>
@@ -666,7 +817,6 @@ export default function RoomPage() {
                     </div>
                   ))}
               </div>
-              {/* New Section for Removing a Player */}
               <div className="mt-4">
                 <h4 className="text-lg font-bold text-gray-800">
                   Remove a Player
@@ -697,53 +847,13 @@ export default function RoomPage() {
         </AnimatePresence>
       )}
 
-      <motion.div
-        initial={{ x: 20, opacity: 0 }}
-        animate={{ x: 0, opacity: 1 }}
-      >
-        <Card className="p-6">
-          <h2 className="text-xl font-semibold mb-2">Penalty Points</h2>
-          {roomData.penalties && Object.keys(roomData.penalties).length > 0 ? (
-            <ul className="list-disc list-inside space-y-1">
-              {Object.entries(roomData.penalties).map(([player, points]) => (
-                <li key={`penalty-${player}`}>
-                  {player}: {points} drink(s)
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p>No penalties yet.</p>
-          )}
-          {roomData.deck.length === 0 && (
-            <p className="mt-2 italic text-sm">
-              Last card! Please finish your penalty drinks.
-            </p>
-          )}
-        </Card>
-      </motion.div>
-
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        className="flex flex-col md:flex-row md:justify-between items-center"
-      >
-        <p className="text-lg">Cards left: {roomData.deck.length}</p>
-        {roomData.deck.length === 0 && (
-          <div className="flex space-x-4 mt-4 md:mt-0">
-            <Button onClick={resetRound}>Reset Round</Button>
-            <Button variant="destructive" onClick={quitRoom}>
-              Quit Room
-            </Button>
-          </div>
-        )}
-      </motion.div>
-
+      {/* Current Rule */}
       {roomData.currentRule && (
         <motion.div
           initial={{ scale: 0.8, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
         >
-          <Card className="p-4">
+          <Card className="p-4 rounded-xl shadow-lg">
             <p>
               <strong>Current Rule:</strong> {roomData.currentRule}
             </p>
@@ -751,84 +861,13 @@ export default function RoomPage() {
         </motion.div>
       )}
 
-      {/* Current Card Section with Fixed Container Height */}
-      <motion.div
-        initial={{ scale: 0.8, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-      >
-        <Card className="p-6">
-          <h2 className="text-2xl font-bold mb-4">Current Card</h2>
-          <div className="relative min-h-[500px]">
-            <AnimatePresence>
-              {roomData.currentCard ? (
-                <motion.div
-                  key="current-card"
-                  layout
-                  className="absolute inset-0 flex flex-col items-center justify-center space-y-4"
-                  initial={{ y: -30, opacity: 0 }}
-                  animate={{ y: 0, opacity: 1 }}
-                  exit={{ y: 30, opacity: 0 }}
-                >
-                  <AnimatedCard
-                    card={roomData.currentCard.card}
-                    suit={roomData.currentCard.suit}
-                    className="mb-4"
-                  />
-                  <p className="text-center">{renderCardMessage()}</p>
-                </motion.div>
-              ) : (
-                <motion.div
-                  key="no-card"
-                  layout
-                  className="absolute inset-0 flex flex-col items-center justify-center text-center text-muted"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                >
-                  <p className="mb-4">Your card will appear here.</p>
-                  {isMyTurn && (
-                    <Button onClick={drawCard} className="mx-auto">
-                      Draw Card
-                    </Button>
-                  )}
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-        </Card>
-      </motion.div>
-
-      {role === "observer" ? (
-        <Card className="p-6">
-          <p>You are observing the game. You cannot take actions.</p>
-        </Card>
-      ) : gameIsPaused ? (
-        <Card className="p-6">
-          <p>Game is paused. Please wait for the referee to resume the game.</p>
-        </Card>
-      ) : isMyTurn ? (
-        <div className="flex justify-center">
-          {!roomData.currentCard ? (
-            <Button onClick={drawCard}>Draw Card</Button>
-          ) : (
-            <Button onClick={endTurn}>End Turn</Button>
-          )}
-        </div>
-      ) : (
-        <Card className="p-6">
-          <p>
-            Waiting for {roomData.players[roomData.currentTurn]} to take their
-            turn.
-          </p>
-        </Card>
-      )}
-
+      {/* Selecting Mate Modal */}
       {selectingMate && isMyTurn && (
         <motion.div
           initial={{ scale: 0.8, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
         >
-          <Card className="p-6">
+          <Card className="p-6 rounded-xl shadow-lg">
             <h3 className="text-xl font-semibold mb-2">Select a Mate</h3>
             <div className="flex flex-wrap gap-2">
               {roomData.players
