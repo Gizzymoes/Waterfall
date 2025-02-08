@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { motion } from "framer-motion";
 
-const SECRET_CODE = "josephissex";
+const SECRET_CODE = process.env.NEXT_PUBLIC_SECRET_CODE;
 
 export default function LoginPage() {
   const router = useRouter();
