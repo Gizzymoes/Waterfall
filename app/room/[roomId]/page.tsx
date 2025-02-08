@@ -630,14 +630,14 @@ export default function RoomPage() {
                 {roomData.isPaused ? (
                   <Button
                     onClick={resumeGame}
-                    className="mb-2 bg-green-500 hover:bg-green-600 text-white"
+                    className="mb-2 bg-green-500 hover:bg-green-600 text-white rounded-xl"
                   >
                     Resume Game
                   </Button>
                 ) : (
                   <Button
                     onClick={pauseGame}
-                    className="mb-2 bg-yellow-500 hover:bg-yellow-600 text-white"
+                    className="mb-2 bg-yellow-500 hover:bg-yellow-600 text-white rounded-xl"
                   >
                     Pause Game
                   </Button>
@@ -653,13 +653,13 @@ export default function RoomPage() {
                   .map((p, index) => (
                     <div
                       key={`violation-${p || "empty"}-${index}`}
-                      className="flex items-center justify-between bg-white p-2 rounded shadow-sm"
+                      className="flex items-center justify-between bg-white p-2 rounded-xl shadow-sm"
                     >
                       <span className="text-gray-800">{p}</span>
                       <Button
                         size="sm"
                         onClick={() => markRuleViolation(p)}
-                        className="bg-red-500 hover:bg-red-600 text-white"
+                        className="bg-red-500 hover:bg-red-600 text-white rounded-xl"
                       >
                         Mark Violation
                       </Button>
@@ -677,13 +677,14 @@ export default function RoomPage() {
                     .map((p, index) => (
                       <div
                         key={`remove-${p || "empty"}-${index}`}
-                        className="flex items-center justify-between bg-white p-2 rounded shadow-sm"
+                        className="flex items-center justify-between bg-white p-2 rounded-xl shadow-sm"
                       >
                         <span className="text-gray-800">{p}</span>
                         <Button
                           size="sm"
                           variant="destructive"
                           onClick={() => removePlayer(p)}
+                          className="bg-red-500 hover:bg-red-600 text-white rounded-xl"
                         >
                           Remove
                         </Button>
