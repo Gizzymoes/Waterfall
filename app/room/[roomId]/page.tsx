@@ -68,6 +68,12 @@ export default function RoomPage() {
   const [localName, setLocalName] = useState<string | null>(null);
   const [role, setRole] = useState<"player" | "referee" | "observer">("player");
   const [selectingMate, setSelectingMate] = useState(false);
+  // New state for mate selection mode ("single" for drinking players, "pair" for referees)
+  const [mateSelectionMode, setMateSelectionMode] = useState<"single" | "pair">(
+    "single"
+  );
+  // New state for tracking selections in pair mode
+  const [selectedMates, setSelectedMates] = useState<string[]>([]);
 
   // Predefined fun messages for referee drink cards.
   const refereeFunMessages: { [key: string]: string[] } = {
@@ -235,6 +241,7 @@ export default function RoomPage() {
       drawnBy: localName || "Unknown",
     };
 
+    // For referees: if they draw specific cards, use fun messages.
     if (
       role === "referee" &&
       ["2", "3", "Jack", "Queen", "8"].includes(nextCard.card)
@@ -244,6 +251,11 @@ export default function RoomPage() {
         const randomIndex = Math.floor(Math.random() * messages.length);
         nextCard.description = messages[randomIndex];
       }
+    }
+    // For referee drawing an Ace (Waterfall), update description.
+    if (role === "referee" && nextCard.card === "Ace") {
+      nextCard.description =
+        "As referee, you don't drink. Nominate someone else to start the waterfall.";
     }
 
     const roomRef = doc(db, "rooms", roomId);
@@ -261,6 +273,13 @@ export default function RoomPage() {
         updateData.currentRule = ruleText;
       }
     } else if (nextCard.action === "Mate") {
+      // Set mate selection mode based on role.
+      if (role === "referee") {
+        setMateSelectionMode("pair");
+      } else {
+        setMateSelectionMode("single");
+      }
+      setSelectedMates([]);
       setSelectingMate(true);
       await updateDoc(roomRef, updateData);
       return;
@@ -272,6 +291,7 @@ export default function RoomPage() {
     await updateDoc(roomRef, updateData);
   };
 
+  // End turn function (used in normal cases)
   const endTurn = async () => {
     if (!isMyTurn) return;
     if (gameIsPaused) return alert("The game is currently paused.");
@@ -283,21 +303,6 @@ export default function RoomPage() {
       penaltyAnnouncement: "",
     });
   };
-
-  // Updates the players array and adjusts currentTurn if needed.
-  // const updatePlayersAfterRemoval = async (newPlayers: string[]) => {
-  //   const roomRef = doc(db, "rooms", roomId);
-  //   let newCurrentTurn = roomData!.currentTurn;
-  //   if (newPlayers.length > 0) {
-  //     newCurrentTurn = newCurrentTurn % newPlayers.length;
-  //   } else {
-  //     newCurrentTurn = 0;
-  //   }
-  //   await updateDoc(roomRef, {
-  //     players: newPlayers,
-  //     currentTurn: newCurrentTurn,
-  //   });
-  // };
 
   // Function for a player to leave the game voluntarily.
   const handleLeaveGame = async () => {
@@ -363,13 +368,51 @@ export default function RoomPage() {
     }
   };
 
+  // Single mate selection for drinking players.
   const chooseMate = async (mateName: string) => {
     const roomRef = doc(db, "rooms", roomId);
     const updatedMates: { [key: string]: string } = {
       ...(roomData.mates ?? {}),
     };
     updatedMates[localName!] = mateName;
-    await updateDoc(roomRef, { mates: updatedMates, currentCard: null });
+    const nextTurn = (roomData.currentTurn + 1) % roomData.players.length;
+    await updateDoc(roomRef, {
+      mates: updatedMates,
+      currentCard: null,
+      currentTurn: nextTurn,
+    });
+    setSelectingMate(false);
+  };
+
+  // For referee mate selection (pair mode): toggles selection of a player.
+  const handleMatePairSelection = (playerName: string) => {
+    if (selectedMates.includes(playerName)) {
+      setSelectedMates(selectedMates.filter((name) => name !== playerName));
+    } else {
+      if (selectedMates.length < 2) {
+        setSelectedMates([...selectedMates, playerName]);
+      }
+    }
+  };
+
+  // Confirm the pair selection: link the two chosen players as mates.
+  const confirmMatePair = async () => {
+    if (selectedMates.length !== 2) {
+      alert("Please select exactly two players to link as mates.");
+      return;
+    }
+    const roomRef = doc(db, "rooms", roomId);
+    const updatedMates: { [key: string]: string } = {
+      ...(roomData.mates ?? {}),
+    };
+    updatedMates[selectedMates[0]] = selectedMates[1];
+    updatedMates[selectedMates[1]] = selectedMates[0];
+    const nextTurn = (roomData.currentTurn + 1) % roomData.players.length;
+    await updateDoc(roomRef, {
+      mates: updatedMates,
+      currentCard: null,
+      currentTurn: nextTurn,
+    });
     setSelectingMate(false);
   };
 
@@ -423,11 +466,15 @@ export default function RoomPage() {
     const cardName = `${card} of ${suit}`;
     if (drawnBy === localName) {
       if (role === "referee") {
+        // If the referee drew a mate card (card "6"), update the message accordingly.
+        if (card === "6") {
+          return `You drew ${cardName}. Choose two players to link as mates.`;
+        }
         return `You drew ${cardName}. ${description}`;
       }
       switch (card) {
         case "Ace":
-          return `You drew ${cardName}. Start the Waterfall—drink continuously until you decide to stop. Everyone must do the same`;
+          return `You drew ${cardName}. Start the Waterfall—drink continuously until you decide to stop. Everyone must do the same.`;
         case "2":
           return `You drew ${cardName}. Take two drinks.`;
         case "3":
@@ -437,9 +484,9 @@ export default function RoomPage() {
         case "5":
           return `You drew ${cardName}. Pick a category. Then go in room order starting with yourself.`;
         case "6":
-          return `You drew ${cardName}. Choose someone to be your mate and to drink along side you`;
+          return `You drew ${cardName}. Choose someone to be your mate and to drink alongside you.`;
         case "7":
-          return `You drew ${cardName}. You're now the Thumb Master`;
+          return `You drew ${cardName}. You're now the Thumb Master.`;
         case "8":
           return `You drew ${cardName}. You must take a drink.`;
         case "9":
@@ -468,13 +515,13 @@ export default function RoomPage() {
         case "Ace":
           return `${drawnBy} drew ${cardName}. Get ready for a waterfall.`;
         case "2":
-          return `${drawnBy} drew ${cardName}. They've gotta drink twice`;
+          return `${drawnBy} drew ${cardName}. They've gotta drink twice.`;
         case "3":
           return `${drawnBy} drew ${cardName}. They choose someone to take three drinks.`;
         case "4":
-          return `${drawnBy} drew ${cardName}. PUT YOUR ARM UP, last to do it has to drink`;
+          return `${drawnBy} drew ${cardName}. PUT YOUR ARM UP, last to do it has to drink.`;
         case "5":
-          return `${drawnBy} drew ${cardName}. Categories time`;
+          return `${drawnBy} drew ${cardName}. Categories time.`;
         case "6":
           return `${drawnBy} drew ${cardName} and is choosing a mate.`;
         case "7":
@@ -484,7 +531,7 @@ export default function RoomPage() {
         case "9":
           return `${drawnBy} drew ${cardName}. It's pog sussy rhyme time. Going in room order, rhyme with the last sentence.`;
         case "10":
-          return `${drawnBy} drew ${cardName} and is now the Question Master`;
+          return `${drawnBy} drew ${cardName} and is now the Question Master.`;
         case "Jack":
           return `${drawnBy} drew ${cardName}. They must take a drink.`;
         case "Queen":
@@ -878,19 +925,51 @@ export default function RoomPage() {
           animate={{ scale: 1, opacity: 1 }}
         >
           <Card className="p-6 rounded-xl shadow-lg">
-            <h3 className="text-xl font-semibold mb-2">Select a Mate</h3>
-            <div className="flex flex-wrap gap-2">
-              {roomData.players
-                .filter((p) => p !== localName)
-                .map((p, index) => (
-                  <Button
-                    key={`mate-${p || "empty"}-${index}`}
-                    onClick={() => chooseMate(p)}
-                  >
-                    {p}
-                  </Button>
-                ))}
-            </div>
+            {mateSelectionMode === "pair" ? (
+              <>
+                <h3 className="text-xl font-semibold mb-2">
+                  Select Two Players to Link as Mates
+                </h3>
+                <div className="flex flex-wrap gap-2">
+                  {roomData.players
+                    .filter((p) => p !== localName)
+                    .map((p, index) => {
+                      const isSelected = selectedMates.includes(p);
+                      return (
+                        <Button
+                          key={`mate-pair-${p || "empty"}-${index}`}
+                          onClick={() => handleMatePairSelection(p)}
+                          variant={isSelected ? "secondary" : "default"}
+                          className={isSelected ? "ring-2 ring-blue-500" : ""}
+                        >
+                          {p}
+                        </Button>
+                      );
+                    })}
+                </div>
+                {selectedMates.length === 2 && (
+                  <div className="mt-4">
+                    <Button onClick={confirmMatePair}>Confirm Mate Pair</Button>
+                  </div>
+                )}
+              </>
+            ) : (
+              <>
+                <h3 className="text-xl font-semibold mb-2">Select a Mate</h3>
+                <div className="flex flex-wrap gap-2">
+                  {roomData.players
+                    .filter((p) => p !== localName)
+                    .map((p, index) => (
+                      <Button
+                        key={`mate-single-${p || "empty"}-${index}`}
+                        onClick={() => chooseMate(p)}
+                      >
+                        {p}
+                      </Button>
+                    ))}
+                </div>
+              </>
+            )}
           </Card>
         </motion.div>
       )}
