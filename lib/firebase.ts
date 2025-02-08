@@ -1,27 +1,22 @@
 // lib/firebase.ts
 import { initializeApp, getApps } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
-// Optionally, if you ever need Analytics in the future:
-// import { getAnalytics } from "firebase/analytics";
 
+// Use environment variables for your Firebase configuration
 const firebaseConfig = {
-  apiKey: "AIzaSyCbdSytUX8cCvT10lckBzFEGtApBhQSkDY",
-  authDomain: "waterfall-69a46.firebaseapp.com",
-  projectId: "waterfall-69a46",
-  storageBucket: "waterfall-69a46.firebasestorage.app",
-  messagingSenderId: "1037962320483",
-  appId: "1:1037962320483:web:985367a5f986b6c690b656",
-  measurementId: "G-FG6ZVYGBPZ",
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
+  measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID,
 };
 
-// Initialize Firebase (avoid initializing more than once during hot reloads)
 if (!getApps().length) {
   initializeApp(firebaseConfig);
 }
-// Initialize Firestore (this is the only service we need right now)
-const db = getFirestore();
 
-// Optionally, initialize Analytics if needed:
-// const analytics = getAnalytics(app);
+const db = getFirestore();
 
 export { db };
