@@ -27,11 +27,15 @@ export default function Providers({ children }: { children: React.ReactNode }) {
         <div className="absolute top-4 right-4 z-50">
           <Dialog>
             <DialogTrigger asChild>
-              <Button variant="ghost" className="p-2">
-                <span className="text-2xl">?</span>
+              <Button
+                variant="outline"
+                size="icon"
+                className="rounded-full bg-white/5 hover:bg-white/10 border-white/30 text-white"
+              >
+                <span className="text-2xl leading-none">?</span>
               </Button>
             </DialogTrigger>
-            <DialogContent className="bg-white dark:bg-gray-800 text-foreground border shadow-lg">
+            <DialogContent className="rounded-xl border border-white/20 bg-white/10 backdrop-blur-md text-white shadow-2xl max-w-lg">
               <DialogHeader>
                 <DialogTitle>Game Legend</DialogTitle>
                 <DialogDescription asChild>

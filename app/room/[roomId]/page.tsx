@@ -1,14 +1,24 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { db } from "@/lib/firebase";
 import { doc, onSnapshot, updateDoc } from "firebase/firestore";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
-import AnimatedCard from "@/components/AnimatedCard";
 import { motion, AnimatePresence } from "framer-motion";
+import dynamic from "next/dynamic";
+import LoadingScreen from "@/components/LoadingScreen";
+
+const Card3D = dynamic(() => import("@/components/Card3D"), {
+  ssr: false,
+  loading: () => (
+    <div className="w-full h-[400px] md:h-[500px] flex items-center justify-center">
+      <div className="w-16 h-16 border-4 border-dashed rounded-full animate-spin border-white"></div>
+    </div>
+  ),
+});
 
 interface CardType {
   card: string;
@@ -59,6 +69,71 @@ interface UpdateData {
     | undefined;
 }
 
+const shuffle = <T,>(array: T[]): T[] => array.sort(() => Math.random() - 0.5);
+
+const cardMapping: {
+  [key: string]: { action: string; description: string };
+} = {
+  Ace: {
+    action: "Waterfall",
+    description: "Drink continuously until you decide to stop.",
+  },
+  "2": { action: "Take a Drink", description: "Take two drinks." },
+  "3": {
+    action: "Give 3",
+    description: "Choose someone to take three drinks.",
+  },
+  "4": {
+    action: "Heaven",
+    description: "PUT YOUR ARM UP for Heaven! The last to do so drinks.",
+  },
+  "5": {
+    action: "Categories",
+    description: "Choose a category; the first to fail drinks.",
+  },
+  "6": {
+    action: "Mate",
+    description: "Choose a mate; when you drink, they drink too.",
+  },
+  "7": {
+    action: "Thumb",
+    description: "You're now the Thumb Master. Raise your thumb anytime.",
+  },
+  "8": { action: "Guys Drink", description: "All the guys drink." },
+  "9": {
+    action: "Bust a Rhyme",
+    description: "Say a word; others must rhyme—first to fail drinks.",
+  },
+  "10": {
+    action: "Question Master",
+    description:
+      "You're now the Question Master. Anyone answering your questions drinks.",
+  },
+  Jack: { action: "Take a Drink", description: "Take a drink." },
+  Queen: { action: "Take a Drink", description: "Take a drink." },
+  King: {
+    action: "New Rule",
+    description: "Create a new rule for the game.",
+  },
+};
+
+function generateDeck(): CardType[] {
+  const deck: CardType[] = [];
+  const suits = ["Hearts", "Diamonds", "Clubs", "Spades"];
+  const ranks = Object.keys(cardMapping);
+  for (const suit of suits) {
+    for (const rank of ranks) {
+      deck.push({
+        card: rank,
+        suit,
+        action: cardMapping[rank].action,
+        description: cardMapping[rank].description,
+      });
+    }
+  }
+  return deck;
+}
+
 export default function RoomPage() {
   const router = useRouter();
   const params = useParams();
@@ -74,34 +149,33 @@ export default function RoomPage() {
   );
   // New state for tracking selections in pair mode
   const [selectedMates, setSelectedMates] = useState<string[]>([]);
+  const [leaveConfirmOpen, setLeaveConfirmOpen] = useState(false);
+  const [isLeaving, setIsLeaving] = useState(false);
+  const [isDrawing, setIsDrawing] = useState(false);
 
-  // Predefined fun messages for referee drink cards.
-  const refereeFunMessages: { [key: string]: string[] } = {
-    "2": [
-      "Who do you think has been the loudest or most over-the-top in this game? Pick them to drink.",
-      "Who do you think has been the biggest complainer this game? They drink.",
-      "Who do you think hesitates the most before making a decision? Give them a drink.",
-      "Who do you think has been the least lucky in this game? Let them drink their sorrows away.",
-    ],
-    "3": [
-      "Who do you think has been roasting people the most? Pick them to drink.",
-      "Who do you think has been making people laugh the hardest, intentionally or not? They drink.",
-      "Who do you think is taking this game the most seriously? Time to balance it out with a drink.",
-    ],
-    Jack: [
-      "Who do you think is getting away with drinking the least? Time for them to catch up.",
-      "Who do you think keeps disappearing the most? Bring them back with a drink.",
-    ],
-    Queen: [
-      "Who do you think has the worst luck in this game? Give them a drink.",
-      "Who do you think secretly enjoys the attention the most? Time for a sip.",
-    ],
-    "8": [
-      "Who do you think has been swearing the most? They drink.",
-      "Who do you think is trying too hard to stay sober? Make them drink.",
-      "Who do you think would be the worst designated driver right now? Pick them to drink.",
-    ],
-  };
+  // State for the generic confirmation/input modal
+  const [modalOpen, setModalOpen] = useState(false);
+  const [modalContent, setModalContent] = useState<{
+    title: string;
+    description: string;
+    inputLabel: string;
+    inputValue: string;
+    onConfirm: (value?: string) => void;
+    confirmText: string;
+    showInput: boolean;
+    showPlayerSelect: boolean;
+    playerSelectValue: string;
+  }>({
+    title: "",
+    description: "",
+    inputLabel: "",
+    inputValue: "",
+    onConfirm: () => {},
+    confirmText: "Confirm",
+    showInput: false,
+    showPlayerSelect: false,
+    playerSelectValue: "",
+  });
 
   // Set local user name and role; if not set, redirect to lobby.
   useEffect(() => {
@@ -159,119 +233,147 @@ export default function RoomPage() {
     }
   }, [roomData?.penaltyAnnouncement, roomData?.isPaused]);
 
+  const cardMessage = useMemo(() => {
+    if (!roomData?.currentCard) return null;
+    const { card, suit, drawnBy, description } = roomData.currentCard;
+    const cardName = `${card} of ${suit}`;
+    if (drawnBy === localName) {
+      if (role === "referee") {
+        // If the referee drew a mate card (card "6"), update the message accordingly.
+        if (card === "6") {
+          return `You drew ${cardName}. Choose two players to link as mates.`;
+        }
+        return `You drew ${cardName}. ${description}`;
+      }
+      switch (card) {
+        case "Ace":
+          return `You drew ${cardName}. Start the Waterfall—drink continuously until you decide to stop. Everyone must do the same.`;
+        case "2":
+          return `You drew ${cardName}. Take two drinks.`;
+        case "3":
+          return `You drew ${cardName}. Choose someone to take three drinks.`;
+        case "4":
+          return `You drew ${cardName}. PUT YOUR ARM UP. The last to do so drinks.`;
+        case "5":
+          return `You drew ${cardName}. Pick a category. Then go in room order starting with yourself.`;
+        case "6":
+          return `You drew ${cardName}. Choose someone to be your mate and to drink alongside you.`;
+        case "7":
+          return `You drew ${cardName}. You're now the Thumb Master.`;
+        case "8":
+          return `You drew ${cardName}. All the guys must take a drink.`;
+        case "9":
+          return `You drew ${cardName}. Say a sentence that rhymes. Then go in room order and everyone must rhyme with that sentence.`;
+        case "10":
+          return `You drew ${cardName}. You're now the Question Master.`;
+        case "Jack":
+          return `You drew ${cardName}. You must take a drink.`;
+        case "Queen":
+          return `You drew ${cardName}. You must take a drink.`;
+        case "King":
+          return `You drew ${cardName} and created a new rule: ${
+            roomData.currentRule || "No rule provided. What a mong"
+          }`;
+        default:
+          return `You drew ${cardName}. ${description}`;
+      }
+    } else {
+      if (
+        drawnBy === roomData.referee &&
+        ["2", "3", "Jack", "Queen", "8"].includes(card)
+      ) {
+        return `${drawnBy} is the referee. They drew ${cardName} and were prompted: "${description}". Whoever they select must drink for them.`;
+      }
+      switch (card) {
+        case "Ace":
+          return `${drawnBy} drew ${cardName}. Get ready for a waterfall.`;
+        case "2":
+          return `${drawnBy} drew ${cardName}. They've gotta drink twice.`;
+        case "3":
+          return `${drawnBy} drew ${cardName}. They choose someone to take three drinks.`;
+        case "4":
+          return `${drawnBy} drew ${cardName}. PUT YOUR ARM UP, last to do it has to drink.`;
+        case "5":
+          return `${drawnBy} drew ${cardName}. Categories time.`;
+        case "6":
+          return `${drawnBy} drew ${cardName} and is choosing a mate.`;
+        case "7":
+          return `${drawnBy} drew ${cardName} and is now the Thumb Master.`;
+        case "8":
+          return `${drawnBy} drew ${cardName}. All the guys must take a drink.`;
+        case "9":
+          return `${drawnBy} drew ${cardName}. It's pog sussy rhyme time. Going in room order, rhyme with the last sentence.`;
+        case "10":
+          return `${drawnBy} drew ${cardName} and is now the Question Master.`;
+        case "Jack":
+          return `${drawnBy} drew ${cardName}. They must take a drink.`;
+        case "Queen":
+          return `${drawnBy} drew ${cardName}. They must take a drink.`;
+        case "King":
+          return `${drawnBy} drew ${cardName} and created a new rule: ${
+            roomData.currentRule || "No rule provided."
+          }`;
+        default:
+          return `${drawnBy} drew ${cardName}. ${description}`;
+      }
+    }
+  }, [
+    roomData?.currentCard,
+    roomData?.currentRule,
+    roomData?.referee,
+    localName,
+    role,
+  ]);
+
   if (!roomData)
     return <p className="text-center py-10 text-lg">Loading room data...</p>;
 
   const gameIsPaused = roomData.isPaused;
   const isMyTurn = localName === roomData.players[roomData.currentTurn];
-
-  const shuffle = <T,>(array: T[]): T[] =>
-    array.sort(() => Math.random() - 0.5);
-
-  const cardMapping: {
-    [key: string]: { action: string; description: string };
-  } = {
-    Ace: {
-      action: "Waterfall",
-      description: "Drink continuously until you decide to stop.",
-    },
-    "2": { action: "Take a Drink", description: "Take two sips." },
-    "3": {
-      action: "Give 2",
-      description: "Choose someone to take three sips.",
-    },
-    "4": {
-      action: "Heaven",
-      description: "PUT YOUR ARM UP for Heaven! The last to do so drinks.",
-    },
-    "5": {
-      action: "Categories",
-      description: "Choose a category; the first to fail drinks.",
-    },
-    "6": {
-      action: "Mate",
-      description: "Choose a mate; when you drink, they drink too.",
-    },
-    "7": {
-      action: "Thumb",
-      description: "You're now the Thumb Master. Raise your thumb anytime.",
-    },
-    "8": { action: "Guys Drink", description: "All the guys drink." },
-    "9": {
-      action: "Bust a Rhyme",
-      description: "Say a word; others must rhyme—first to fail drinks.",
-    },
-    "10": {
-      action: "Question Master",
-      description:
-        "You're now the Question Master. Anyone answering your questions drinks.",
-    },
-    Jack: { action: "Take a Drink", description: "Take a drink." },
-    Queen: { action: "Take a Drink", description: "Take a drink." },
-    King: {
-      action: "New Rule",
-      description: "Create a new rule for the game.",
-    },
-  };
-
-  function generateDeck(): CardType[] {
-    const deck: CardType[] = [];
-    const suits = ["Hearts", "Diamonds", "Clubs", "Spades"];
-    const ranks = Object.keys(cardMapping);
-    for (const suit of suits) {
-      for (const rank of ranks) {
-        deck.push({
-          card: rank,
-          suit,
-          action: cardMapping[rank].action,
-          description: cardMapping[rank].description,
-        });
-      }
-    }
-    return deck;
-  }
+  const isSpectator = role === "observer";
 
   const drawCard = async () => {
-    if (!roomData.deck || roomData.deck.length === 0)
-      return alert("No more cards in the deck!");
+    if (!roomData || !roomData.deck || roomData.deck.length === 0) return;
+    if (isDrawing) return;
+    if (isSpectator) return alert("Spectators cannot draw cards.");
     if (!isMyTurn) return alert("It's not your turn!");
     if (gameIsPaused) return alert("The game is currently paused.");
+
+    setIsDrawing(true);
+
+    // Simulate drawing card animation delay
+    await new Promise((res) => setTimeout(res, 500));
+
     const nextCard: CardType = {
       ...roomData.deck[0],
       drawnBy: localName || "Unknown",
     };
 
-    // For referees: if they draw specific cards, use fun messages.
-    if (
-      role === "referee" &&
-      ["2", "3", "Jack", "Queen", "8"].includes(nextCard.card)
-    ) {
-      const messages = refereeFunMessages[nextCard.card] || [];
-      if (messages.length > 0) {
-        const randomIndex = Math.floor(Math.random() * messages.length);
-        nextCard.description = messages[randomIndex];
-      }
-    }
-    // For referee drawing an Ace (Waterfall), update description.
-    if (role === "referee" && nextCard.card === "Ace") {
-      nextCard.description =
-        "As referee, you don't drink. Nominate someone else to start the waterfall.";
-    }
-
+    // Update Firestore
     const roomRef = doc(db, "rooms", roomId);
-    const updateData: UpdateData = {
-      deck: roomData.deck.slice(1),
-      currentCard: nextCard,
-      penaltyAnnouncement: "",
-    };
 
     if (nextCard.action === "New Rule") {
-      const ruleText = prompt(
-        "You picked out the Rule Card! Enter your new rule:"
-      );
-      if (ruleText) {
-        updateData.currentRule = ruleText;
-      }
+      await updateDoc(roomRef, {
+        deck: roomData.deck.slice(1),
+        currentCard: nextCard,
+        thumbMaster: localName,
+      });
+      setModalContent({
+        title: "Create a New Rule",
+        description: "You drew a King! Enter a new rule for the game.",
+        inputLabel: "New Rule",
+        inputValue: "",
+        onConfirm: async (ruleText) => {
+          if (ruleText) {
+            await updateDoc(roomRef, { currentRule: ruleText });
+          }
+        },
+        confirmText: "Set Rule",
+        showInput: true,
+        showPlayerSelect: false,
+        playerSelectValue: "",
+      });
+      setModalOpen(true);
     } else if (nextCard.action === "Mate") {
       // Set mate selection mode based on role.
       if (role === "referee") {
@@ -281,14 +383,24 @@ export default function RoomPage() {
       }
       setSelectedMates([]);
       setSelectingMate(true);
-      await updateDoc(roomRef, updateData);
-      return;
+      await updateDoc(roomRef, {
+        deck: roomData.deck.slice(1),
+        currentCard: nextCard,
+      });
     } else if (nextCard.action === "Thumb") {
-      updateData.thumbMaster = localName;
+      await updateDoc(roomRef, {
+        thumbMaster: localName,
+      });
     } else if (nextCard.action === "Question Master") {
-      updateData.questionMaster = localName;
+      await updateDoc(roomRef, {
+        questionMaster: localName,
+      });
     }
-    await updateDoc(roomRef, updateData);
+    await updateDoc(roomRef, {
+      deck: roomData.deck.slice(1),
+      currentCard: nextCard,
+    });
+    setIsDrawing(false);
   };
 
   // End turn function (used in normal cases)
@@ -305,8 +417,7 @@ export default function RoomPage() {
   };
 
   // Function for a player to leave the game voluntarily.
-  const handleLeaveGame = async () => {
-    if (!confirm("Are you sure you want to leave the game?")) return;
+  const performLeaveGame = async () => {
     try {
       const newPlayers = roomData.players.filter((p) => p !== localName);
       const removedIndex = roomData.players.indexOf(localName!);
@@ -337,7 +448,21 @@ export default function RoomPage() {
     } catch (error) {
       console.error("Error leaving game:", error);
       alert("Failed to leave the game. Please try again.");
+      setIsLeaving(false); // Turn off loader on error
     }
+  };
+
+  const handleConfirmLeave = () => {
+    setLeaveConfirmOpen(false);
+    // Wait for modal to close, then trigger loader + leave
+    setTimeout(() => {
+      setIsLeaving(true); // Show loader
+      performLeaveGame(); // Perform actual leave logic
+    }, 300); // Corresponds to animation duration
+  };
+
+  const handleLeaveGame = () => {
+    setLeaveConfirmOpen(true);
   };
 
   // Function for the referee to remove another player.
@@ -417,133 +542,133 @@ export default function RoomPage() {
   };
 
   const resetRound = async () => {
-    const roomRef = doc(db, "rooms", roomId);
-    const newDeck = shuffle(generateDeck());
-    await updateDoc(roomRef, { deck: newDeck, currentCard: null });
+    setModalContent({
+      title: "Reset Round",
+      description:
+        "This will reset the deck and all game states except for players. Are you sure?",
+      onConfirm: async () => {
+        if (!roomData || !roomId) return;
+        await updateDoc(doc(db, "rooms", roomId), {
+          deck: shuffle(generateDeck()),
+          currentCard: null,
+          thumbMaster: null,
+          questionMaster: null,
+          currentRule: "",
+          mates: {},
+          penalties: {},
+          isPaused: false,
+          pauseReason: "",
+          penaltyAnnouncement: "",
+          currentTurn: 0,
+        });
+      },
+      confirmText: "Reset",
+      showInput: false,
+      showPlayerSelect: false,
+      inputLabel: "",
+      inputValue: "",
+      playerSelectValue: "",
+    });
+    setModalOpen(true);
   };
 
   const quitRoom = () => {
-    localStorage.removeItem("playerName");
-    localStorage.removeItem("roomId");
-    localStorage.removeItem("playerRole");
-    router.push("/lobby");
+    setModalContent({
+      title: "Quit Room",
+      description: "Are you sure you want to end the game for everyone?",
+      onConfirm: async () => {
+        if (!roomId) return;
+        await updateDoc(doc(db, "rooms", roomId), {
+          players: [],
+          deck: [],
+        });
+        router.push("/lobby");
+      },
+      confirmText: "Quit",
+      showInput: false,
+      showPlayerSelect: false,
+      inputLabel: "",
+      inputValue: "",
+      playerSelectValue: "",
+    });
+    setModalOpen(true);
   };
 
   const markRuleViolation = async (playerName: string) => {
-    if (role !== "referee") return;
-    const reason = prompt(
-      "Enter a short description explaining why you're giving this violation (and what a violation means):"
-    );
-    if (!reason) return;
-    const roomRef = doc(db, "rooms", roomId);
-    const currentPenalties = roomData.penalties || {};
-    const newCount = (currentPenalties[playerName] || 0) + 1;
-    const announcement = `Referee: ${playerName} has been given a violation for "${reason}". They must drink their penalty at the end of the game.`;
-    await updateDoc(roomRef, {
-      penalties: { ...currentPenalties, [playerName]: newCount },
-      penaltyAnnouncement: announcement,
+    if (!roomData?.penalties) return;
+    const currentPenalties = roomData.penalties[playerName] || 0;
+    await updateDoc(doc(db, "rooms", roomId), {
+      [`penalties.${playerName}`]: currentPenalties + 1,
+      penaltyAnnouncement: `${playerName} violated a rule! They now have ${
+        currentPenalties + 1
+      } penalty points.`,
     });
   };
 
   const pauseGame = async () => {
-    const reason = prompt(
-      "Enter pause reason (e.g., Toilet Break):",
-      "Toilet Break"
-    );
-    if (!reason) return;
-    const roomRef = doc(db, "rooms", roomId);
-    await updateDoc(roomRef, { isPaused: true, pauseReason: reason });
+    setModalContent({
+      title: "Pause Game",
+      description: "Enter a reason for pausing the game.",
+      inputLabel: "Reason for pausing",
+      inputValue: "",
+      onConfirm: async (reason) => {
+        if (!reason || reason.trim() === "") return;
+        await updateDoc(doc(db, "rooms", roomId), {
+          isPaused: true,
+          pauseReason: reason,
+        });
+      },
+      confirmText: "Pause",
+      showInput: true,
+      showPlayerSelect: false,
+      playerSelectValue: "",
+    });
+    setModalOpen(true);
   };
 
   const resumeGame = async () => {
-    const roomRef = doc(db, "rooms", roomId);
-    await updateDoc(roomRef, { isPaused: false, pauseReason: "" });
+    await updateDoc(doc(db, "rooms", roomId), {
+      isPaused: false,
+      pauseReason: "",
+    });
   };
 
-  const renderCardMessage = (): string | null => {
-    if (!roomData.currentCard) return null;
-    const { card, suit, drawnBy, description } = roomData.currentCard;
-    const cardName = `${card} of ${suit}`;
-    if (drawnBy === localName) {
-      if (role === "referee") {
-        // If the referee drew a mate card (card "6"), update the message accordingly.
-        if (card === "6") {
-          return `You drew ${cardName}. Choose two players to link as mates.`;
+  const handleMarkViolation = () => {
+    setModalContent({
+      title: "Mark Violation",
+      description: "Select a player to mark for a rule violation.",
+      onConfirm: async (player) => {
+        if (player) {
+          markRuleViolation(player);
         }
-        return `You drew ${cardName}. ${description}`;
-      }
-      switch (card) {
-        case "Ace":
-          return `You drew ${cardName}. Start the Waterfall—drink continuously until you decide to stop. Everyone must do the same.`;
-        case "2":
-          return `You drew ${cardName}. Take two drinks.`;
-        case "3":
-          return `You drew ${cardName}. Choose someone to take three drinks.`;
-        case "4":
-          return `You drew ${cardName}. PUT YOUR ARM UP. The last to do so drinks.`;
-        case "5":
-          return `You drew ${cardName}. Pick a category. Then go in room order starting with yourself.`;
-        case "6":
-          return `You drew ${cardName}. Choose someone to be your mate and to drink alongside you.`;
-        case "7":
-          return `You drew ${cardName}. You're now the Thumb Master.`;
-        case "8":
-          return `You drew ${cardName}. You must take a drink.`;
-        case "9":
-          return `You drew ${cardName}. Say a sentence that rhymes. Then go in room order and everyone must rhyme with that sentence.`;
-        case "10":
-          return `You drew ${cardName}. You're now the Question Master.`;
-        case "Jack":
-          return `You drew ${cardName}. You must take a drink.`;
-        case "Queen":
-          return `You drew ${cardName}. You must take a drink.`;
-        case "King":
-          return `You drew ${cardName} and created a new rule: ${
-            roomData.currentRule || "No rule provided. What a mong"
-          }`;
-        default:
-          return `You drew ${cardName}. ${description}`;
-      }
-    } else {
-      if (
-        drawnBy === roomData.referee &&
-        ["2", "3", "Jack", "Queen", "8"].includes(card)
-      ) {
-        return `${drawnBy} is the referee. They drew ${cardName} and were prompted: "${description}". Whoever they select must drink for them.`;
-      }
-      switch (card) {
-        case "Ace":
-          return `${drawnBy} drew ${cardName}. Get ready for a waterfall.`;
-        case "2":
-          return `${drawnBy} drew ${cardName}. They've gotta drink twice.`;
-        case "3":
-          return `${drawnBy} drew ${cardName}. They choose someone to take three drinks.`;
-        case "4":
-          return `${drawnBy} drew ${cardName}. PUT YOUR ARM UP, last to do it has to drink.`;
-        case "5":
-          return `${drawnBy} drew ${cardName}. Categories time.`;
-        case "6":
-          return `${drawnBy} drew ${cardName} and is choosing a mate.`;
-        case "7":
-          return `${drawnBy} drew ${cardName} and is now the Thumb Master.`;
-        case "8":
-          return `${drawnBy} drew ${cardName}. They must take a drink.`;
-        case "9":
-          return `${drawnBy} drew ${cardName}. It's pog sussy rhyme time. Going in room order, rhyme with the last sentence.`;
-        case "10":
-          return `${drawnBy} drew ${cardName} and is now the Question Master.`;
-        case "Jack":
-          return `${drawnBy} drew ${cardName}. They must take a drink.`;
-        case "Queen":
-          return `${drawnBy} drew ${cardName}. They must take a drink.`;
-        case "King":
-          return `${drawnBy} drew ${cardName} and created a new rule: ${
-            roomData.currentRule || "No rule provided."
-          }`;
-        default:
-          return `${drawnBy} drew ${cardName}. ${description}`;
-      }
-    }
+      },
+      confirmText: "Mark",
+      showInput: false,
+      showPlayerSelect: true,
+      inputLabel: "",
+      inputValue: "",
+      playerSelectValue: roomData?.players[0] || "",
+    });
+    setModalOpen(true);
+  };
+
+  const handleRemovePlayer = () => {
+    setModalContent({
+      title: "Remove Player",
+      description: "Select a player to remove from the game.",
+      onConfirm: async (player) => {
+        if (player) {
+          removePlayer(player);
+        }
+      },
+      confirmText: "Remove",
+      showInput: false,
+      showPlayerSelect: true,
+      inputLabel: "",
+      inputValue: "",
+      playerSelectValue: roomData?.players[0] || "",
+    });
+    setModalOpen(true);
   };
 
   return (
@@ -667,8 +792,12 @@ export default function RoomPage() {
                 ))}
               </ul>
               {role !== "observer" && (
-                <div className="text-center mt-4">
-                  <Button variant="destructive" onClick={handleLeaveGame}>
+                <div className="mt-4">
+                  <Button
+                    variant="destructive"
+                    onClick={handleLeaveGame}
+                    className="w-full"
+                  >
                     Leave Game
                   </Button>
                 </div>
@@ -713,46 +842,50 @@ export default function RoomPage() {
             initial={{ scale: 0.8, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
           >
-            <Card className="p-6 rounded-xl shadow-lg">
+            <Card className="p-6 rounded-xl shadow-lg overflow-hidden">
               <h2 className="text-2xl font-bold mb-4">Current Card</h2>
-              <div className="relative min-h-[300px] md:min-h-[500px]">
+              <div className="relative min-h-[400px] md:min-h-[500px]">
                 <AnimatePresence>
                   {roomData.currentCard ? (
                     <motion.div
                       key="current-card"
                       layout
-                      className="static md:absolute md:inset-0 flex flex-col items-center justify-center space-y-4"
+                      className="absolute inset-0 flex flex-col items-center justify-start space-y-4 p-4 pt-8"
                       initial={{ y: -30, opacity: 0 }}
                       animate={{ y: 0, opacity: 1 }}
                       exit={{ y: 30, opacity: 0 }}
                     >
-                      <AnimatedCard
+                      <Card3D
                         card={roomData.currentCard.card}
                         suit={roomData.currentCard.suit}
-                        className="mb-4"
                       />
-                      <p className="text-center text-lg break-words">
-                        {renderCardMessage()}
-                      </p>
+                      <AnimatePresence>
+                        <motion.div
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          className="w-full px-4 text-center text-white"
+                        >
+                          <h3 className="text-2xl font-bold mb-2">
+                            {roomData.currentCard.action}
+                          </h3>
+                          <p className="text-lg break-words max-w-full">
+                            {cardMessage}
+                          </p>
+                        </motion.div>
+                      </AnimatePresence>
                     </motion.div>
                   ) : (
                     <motion.div
                       key="no-card"
                       layout
-                      className="static md:absolute md:inset-0 flex flex-col items-center justify-center text-center text-gray-500"
+                      className="absolute inset-0 flex flex-col items-center justify-center text-center text-gray-500"
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
                       exit={{ opacity: 0 }}
                     >
-                      <p className="mb-4">Your card will appear here.</p>
-                      {isMyTurn && (
-                        <Button
-                          onClick={drawCard}
-                          className="mx-auto w-full md:w-auto"
-                        >
-                          Draw Card
-                        </Button>
-                      )}
+                      <p className="mb-4 text-white/80">
+                        Your card will appear here.
+                      </p>
                     </motion.div>
                   )}
                 </AnimatePresence>
@@ -778,16 +911,43 @@ export default function RoomPage() {
                 </p>
               </Card>
             ) : isMyTurn ? (
-              <div className="flex flex-col items-center space-y-4">
-                {!roomData.currentCard ? (
-                  <Button onClick={drawCard} className="w-full md:w-auto">
-                    Draw Card
-                  </Button>
-                ) : (
-                  <Button onClick={endTurn} className="w-full md:w-auto">
-                    End Turn
-                  </Button>
-                )}
+              <div className="flex flex-col items-center space-y-4 min-h-[44px]">
+                <AnimatePresence mode="wait">
+                  {!roomData.currentCard ? (
+                    <motion.div
+                      key="draw-card-btn"
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: 10 }}
+                    >
+                      <Button
+                        onClick={drawCard}
+                        disabled={isDrawing}
+                        className="w-full md:w-auto"
+                      >
+                        {isDrawing ? (
+                          <div className="flex items-center">
+                            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
+                            <span>Drawing...</span>
+                          </div>
+                        ) : (
+                          "Draw Card"
+                        )}
+                      </Button>
+                    </motion.div>
+                  ) : (
+                    <motion.div
+                      key="end-turn-btn"
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: 10 }}
+                    >
+                      <Button onClick={endTurn} className="w-full md:w-auto">
+                        End Turn
+                      </Button>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
             ) : (
               <Card className="p-6 rounded-xl shadow-lg">
@@ -830,8 +990,8 @@ export default function RoomPage() {
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 20, opacity: 0 }}
           >
-            <Card className="p-6 rounded-xl shadow-lg bg-gray-50 border border-gray-200">
-              <h3 className="text-2xl font-bold mb-4 text-gray-800">
+            <Card className="p-6 rounded-xl shadow-lg border border-white/20 bg-white/10 backdrop-blur-md text-white">
+              <h3 className="text-2xl font-bold mb-4 text-white">
                 Referee Controls
               </h3>
               <div className="mb-4">
@@ -851,53 +1011,48 @@ export default function RoomPage() {
                   </Button>
                 )}
               </div>
-              <p className="mb-2 text-gray-700">
+              <p className="mb-2 text-white/80">
                 Mark a violation for a player (this assigns a penalty for the
                 end of the game):
               </p>
-              <div className="space-y-2">
-                {roomData.players
-                  .filter((p) => p !== roomData.referee)
-                  .map((p, index) => (
-                    <div
-                      key={`violation-${p || "empty"}-${index}`}
-                      className="flex items-center justify-between bg-white p-2 rounded-xl shadow-sm"
-                    >
-                      <span className="text-gray-800">{p}</span>
-                      <Button
-                        size="sm"
-                        onClick={() => markRuleViolation(p)}
-                        className="bg-red-500 hover:bg-red-600 text-white rounded-xl"
-                      >
-                        Mark Violation
-                      </Button>
-                    </div>
-                  ))}
+              <div className="flex flex-wrap gap-2 mb-4">
+                <Button
+                  onClick={handleMarkViolation}
+                  className="bg-orange-500 hover:bg-orange-600 text-white rounded-xl"
+                >
+                  Mark Violation
+                </Button>
               </div>
-              <div className="mt-4">
-                <h4 className="text-lg font-bold text-gray-800">
-                  Remove a Player
-                </h4>
-                <div className="space-y-2">
-                  {roomData.players
-                    .filter((p) => p !== roomData.referee)
-                    .map((p, index) => (
-                      <div
-                        key={`remove-${p || "empty"}-${index}`}
-                        className="flex items-center justify-between bg-white p-2 rounded-xl shadow-sm"
-                      >
-                        <span className="text-gray-800">{p}</span>
-                        <Button
-                          size="sm"
-                          variant="destructive"
-                          onClick={() => removePlayer(p)}
-                          className="bg-red-500 hover:bg-red-600 text-white rounded-xl"
-                        >
-                          Remove
-                        </Button>
-                      </div>
-                    ))}
-                </div>
+
+              <p className="mb-2 text-white/80">
+                If a player has left, you can remove them from the game:
+              </p>
+              <div className="flex flex-wrap gap-2 mb-4">
+                <Button
+                  onClick={handleRemovePlayer}
+                  className="bg-red-700 hover:bg-red-800 text-white rounded-xl"
+                >
+                  Remove Player
+                </Button>
+              </div>
+
+              <p className="mb-2 text-white/80">
+                To start a fresh round with the same players, or if something
+                has gone wrong, you can reset the round:
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  onClick={resetRound}
+                  className="bg-blue-500 hover:bg-blue-600 text-white rounded-xl"
+                >
+                  Reset Round
+                </Button>
+                <Button
+                  onClick={quitRoom}
+                  className="bg-gray-700 hover:bg-gray-800 text-white rounded-xl"
+                >
+                  Quit Room
+                </Button>
               </div>
             </Card>
           </motion.div>
@@ -973,6 +1128,133 @@ export default function RoomPage() {
           </Card>
         </motion.div>
       )}
+
+      <AnimatePresence>
+        {leaveConfirmOpen && (
+          <motion.div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            style={{ marginTop: 0 }}
+          >
+            <motion.div
+              initial={{ scale: 0.8, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.8, opacity: 0 }}
+              transition={{ type: "spring", stiffness: 260, damping: 20 }}
+              className="w-full max-w-sm p-6 rounded-xl border border-white/20 bg-white/10 backdrop-blur-md text-white shadow-2xl"
+            >
+              <h2 className="text-2xl font-bold mb-2">Leave Game?</h2>
+              <p className="mb-6 text-white/80">
+                Are you sure you want to leave this room?
+              </p>
+              <div className="flex justify-end gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => setLeaveConfirmOpen(false)}
+                  className="bg-transparent hover:bg-white/10"
+                >
+                  Cancel
+                </Button>
+                <Button variant="destructive" onClick={handleConfirmLeave}>
+                  Leave
+                </Button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Generic Referee Modal */}
+      <AnimatePresence>
+        {modalOpen && (
+          <motion.div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            style={{ marginTop: 0 }}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              transition={{ type: "spring", stiffness: 260, damping: 20 }}
+              className="w-full max-w-sm p-6 rounded-xl border border-white/20 bg-white/10 backdrop-blur-md text-white shadow-2xl"
+            >
+              <h2 className="text-2xl font-bold mb-2">{modalContent.title}</h2>
+              <p className="mb-6 text-white/80">{modalContent.description}</p>
+
+              {modalContent.showInput && (
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-white mb-2">
+                    {modalContent.inputLabel}
+                  </label>
+                  <input
+                    type="text"
+                    value={modalContent.inputValue}
+                    onChange={(e) =>
+                      setModalContent((prev) => ({
+                        ...prev,
+                        inputValue: e.target.value,
+                      }))
+                    }
+                    className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                  />
+                </div>
+              )}
+
+              {modalContent.showPlayerSelect && (
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-white mb-2">
+                    Select Player
+                  </label>
+                  <select
+                    value={modalContent.playerSelectValue}
+                    onChange={(e) =>
+                      setModalContent((prev) => ({
+                        ...prev,
+                        playerSelectValue: e.target.value,
+                      }))
+                    }
+                    className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                  >
+                    {roomData?.players.map((p, index) => (
+                      <option
+                        key={`player-select-${p || "fallback"}-${index}`}
+                        value={p}
+                      >
+                        {p}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => setModalOpen(false)}>
+                  Cancel
+                </Button>
+                <Button
+                  variant="destructive"
+                  onClick={() => {
+                    const valueToConfirm = modalContent.showPlayerSelect
+                      ? modalContent.playerSelectValue
+                      : modalContent.inputValue;
+                    modalContent.onConfirm(valueToConfirm);
+                    setModalOpen(false);
+                  }}
+                >
+                  {modalContent.confirmText}
+                </Button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {isLeaving && <LoadingScreen message="Leaving game..." />}
     </motion.div>
   );
 }

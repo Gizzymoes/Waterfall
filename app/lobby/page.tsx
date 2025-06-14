@@ -19,15 +19,6 @@ import { Card } from "@/components/ui/card";
 import { motion, AnimatePresence } from "framer-motion";
 
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
-import {
-  AlertDialog,
-  AlertDialogContent,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogDescription,
-  AlertDialogAction,
-  AlertDialogCancel,
-} from "@/components/ui/alert-dialog";
 
 interface CardType {
   card: string;
@@ -316,10 +307,10 @@ export default function Lobby() {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="container mx-auto p-4"
+          className="container mx-auto p-4 sm:p-6 md:p-8"
         >
-          <div className="max-w-3xl mx-auto">
-            <h1 className="text-3xl font-bold text-center mb-8">
+          <div className="max-w-md md:max-w-2xl lg:max-w-3xl mx-auto">
+            <h1 className="text-3xl md:text-4xl font-bold text-center mb-8">
               Multiplayer Lobby
             </h1>
 
@@ -346,10 +337,7 @@ export default function Lobby() {
 
             {/* Common inputs for name and role */}
             <div className="mb-8">
-              <Label
-                htmlFor="name"
-                className="block text-sm font-medium text-gray-700 mb-1"
-              >
+              <Label htmlFor="name" className="block text-sm mb-1 text-white">
                 Your Name
               </Label>
               <Input
@@ -358,73 +346,61 @@ export default function Lobby() {
                 placeholder="Enter your name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="w-full rounded-md border border-gray-300 shadow-sm"
+                className="w-full"
               />
             </div>
 
             <div className="mb-8">
-              <p className="text-sm font-medium text-gray-700 mb-1">
+              <p className="text-sm font-medium text-white mb-1 mt-6">
                 Select Role
               </p>
-              <div className="flex items-center space-x-4">
-                <label className="flex items-center space-x-2">
-                  <input
-                    type="radio"
-                    name="role"
-                    value="player"
-                    checked={role === "player"}
-                    onChange={(e) =>
-                      setRole(
-                        e.target.value as "player" | "referee" | "observer"
-                      )
+              <div className="flex items-center space-x-3 flex-wrap">
+                {(
+                  [
+                    { value: "player", label: "Player" },
+                    { value: "referee", label: "Referee" },
+                    { value: "observer", label: "Observer" },
+                  ] as const
+                ).map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() =>
+                      setRole(opt.value as "player" | "referee" | "observer")
                     }
-                    className="form-radio text-blue-500"
-                  />
-                  <span className="text-sm">Player</span>
-                </label>
-                <label className="flex items-center space-x-2">
-                  <input
-                    type="radio"
-                    name="role"
-                    value="referee"
-                    checked={role === "referee"}
-                    onChange={(e) =>
-                      setRole(
-                        e.target.value as "player" | "referee" | "observer"
-                      )
+                    className={
+                      (role === opt.value
+                        ? "bg-white/20 backdrop-blur-md"
+                        : "bg-white/5 hover:bg-white/10") +
+                      " rounded-full px-4 py-1 text-sm font-semibold text-white transition-colors"
                     }
-                    className="form-radio text-blue-500"
-                  />
-                  <span className="text-sm">Referee</span>
-                </label>
-                <label className="flex items-center space-x-2">
-                  <input
-                    type="radio"
-                    name="role"
-                    value="observer"
-                    checked={role === "observer"}
-                    onChange={(e) =>
-                      setRole(
-                        e.target.value as "player" | "referee" | "observer"
-                      )
-                    }
-                    className="form-radio text-blue-500"
-                  />
-                  <span className="text-sm">Observer</span>
-                </label>
+                  >
+                    {opt.label}
+                  </button>
+                ))}
               </div>
-              {role === "observer" && (
-                <p className="mt-1 text-xs text-red-500">
-                  Observers cannot create a room.
-                </p>
-              )}
+              <motion.div layout className="min-h-[20px] pt-1">
+                <AnimatePresence mode="wait">
+                  {role === "observer" && (
+                    <motion.p
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -10 }}
+                      transition={{ duration: 0.3 }}
+                      className="text-sm text-yellow-300"
+                    >
+                      Note: Observers cannot create a room.
+                    </motion.p>
+                  )}
+                </AnimatePresence>
+              </motion.div>
             </div>
 
             {/* Action cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
               <Card className="p-6">
                 <h2 className="text-xl font-bold mb-4">Create a Room</h2>
-                <p className="text-sm text-gray-600 mb-4">
+                <p className="text-sm text-white/80 mb-4">
                   Start a new room to play with friends.
                 </p>
                 <Button
@@ -441,7 +417,7 @@ export default function Lobby() {
                 <div className="mb-4">
                   <Label
                     htmlFor="join-room"
-                    className="block text-sm font-medium text-gray-700 mb-1"
+                    className="block text-sm text-white mb-1"
                   >
                     Room ID
                   </Label>
@@ -451,7 +427,7 @@ export default function Lobby() {
                     placeholder="Enter room code"
                     value={joinRoomId}
                     onChange={(e) => setJoinRoomId(e.target.value)}
-                    className="w-full rounded-md border border-gray-300 shadow-sm"
+                    className="w-full"
                   />
                 </div>
                 <Button
@@ -469,7 +445,7 @@ export default function Lobby() {
               <Card className="p-6">
                 <h2 className="text-xl font-bold mb-4">Active Lobbies</h2>
                 {activeLobbies.length === 0 ? (
-                  <p className="text-sm text-gray-600">
+                  <p className="text-sm text-white/80">
                     No active lobbies available.
                   </p>
                 ) : (
@@ -477,9 +453,9 @@ export default function Lobby() {
                     {activeLobbies.map((lobby, index) => (
                       <li
                         key={`lobby-${lobby.id || "empty"}-${index}`}
-                        className="flex items-center justify-between border-b border-gray-200 py-2"
+                        className="flex flex-col sm:flex-row items-start sm:items-center justify-between border-b border-white/20 py-2 gap-2"
                       >
-                        <span className="text-sm font-medium">
+                        <span className="text-sm font-medium text-left">
                           <strong>{lobby.id || "Unknown"}</strong> (
                           {lobby.players.length} players)
                         </span>
@@ -487,7 +463,7 @@ export default function Lobby() {
                           size="sm"
                           onClick={() => handleJoinActiveLobby(lobby.id)}
                           variant="outline"
-                          className="rounded-md"
+                          className="rounded-xl"
                         >
                           Join
                         </Button>
@@ -502,29 +478,47 @@ export default function Lobby() {
       </AnimatePresence>
 
       {/* Confirmation Dialog */}
-      <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>{confirmTitle}</AlertDialogTitle>
-            <AlertDialogDescription>
-              {confirmDescription}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <div className="flex justify-end space-x-2 mt-4">
-            <AlertDialogCancel onClick={() => setConfirmOpen(false)}>
-              Cancel
-            </AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => {
-                setConfirmOpen(false);
-                confirmAction();
-              }}
+      <AnimatePresence>
+        {confirmOpen && (
+          <motion.div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            style={{ marginTop: 0 }}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              transition={{ type: "spring", stiffness: 260, damping: 20 }}
+              className="w-full max-w-sm p-6 rounded-xl border border-white/20 bg-white/10 backdrop-blur-md text-white shadow-2xl"
             >
-              Confirm
-            </AlertDialogAction>
-          </div>
-        </AlertDialogContent>
-      </AlertDialog>
+              <h2 className="text-2xl font-bold mb-2">{confirmTitle}</h2>
+              <p className="mb-6 text-white/80">{confirmDescription}</p>
+              <div className="flex justify-end gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => setConfirmOpen(false)}
+                  className="bg-transparent hover:bg-white/10"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  variant="destructive"
+                  onClick={() => {
+                    confirmAction();
+                    setConfirmOpen(false);
+                  }}
+                  className="bg-green-600 hover:bg-green-700 text-white"
+                >
+                  Confirm
+                </Button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </>
   );
 }

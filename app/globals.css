@@ -1,5 +1,9 @@
 /* app/globals.css */
+/* Base font for body */
 @import url("https://rsms.me/inter/inter.css");
+
+/* Fun display font for headings */
+@import url("https://fonts.googleapis.com/css2?family=Fredoka+One&display=swap");
 
 @tailwind base;
 @tailwind components;
@@ -7,4 +11,14 @@
 
 body {
   font-family: "Inter", sans-serif;
+}
+
+/* Headings get the playful Fredoka font */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: "Fredoka One", cursive;
 }
